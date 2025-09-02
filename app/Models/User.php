@@ -18,9 +18,14 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
-        'name',
+        'nik',
+        'nama',
+        'username',
         'email',
         'password',
+        'gudang_id',
+        'jabatan_id',
+        'is_active',
     ];
 
     /**
@@ -41,4 +46,20 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    /**
+     * Get the jabatan that the user belongs to.
+     */
+    public function jabatan()
+    {
+        return $this->belongsTo(Jabatan::class);
+    }
+
+    /**
+     * Get the gudang that the user is assigned to.
+     */
+    public function gudang()
+    {
+        return $this->belongsTo(Gudang::class);
+    }
 }

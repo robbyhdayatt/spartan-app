@@ -14,8 +14,8 @@ return [
     |
     */
 
-    'title' => 'AdminLTE 3',
-    'title_prefix' => '',
+    'title' => 'SPARTAN',
+    'title_prefix' => 'SPARTAN LTI | ',
     'title_postfix' => '',
 
     /*
@@ -63,8 +63,8 @@ return [
     |
     */
 
-    'logo' => '<b>Admin</b>LTE',
-    'logo_img' => 'vendor/adminlte/dist/img/AdminLTELogo.png',
+    'logo' => '<b>SPARTAN</b>',
+    'logo_img' => 'img/logo_perusahaan.png', // Ganti dengan nama file logo Anda
     'logo_img_class' => 'brand-image img-circle elevation-3',
     'logo_img_xl' => null,
     'logo_img_xl_class' => 'brand-image-xs',
@@ -84,13 +84,13 @@ return [
     */
 
     'auth_logo' => [
-        'enabled' => false,
+        'enabled' => true, // Aktifkan
         'img' => [
-            'path' => 'vendor/adminlte/dist/img/AdminLTELogo.png',
-            'alt' => 'Auth Logo',
+            'path' => 'img/logo_perusahaan_besar.png', // Ganti dengan logo yang lebih besar
+            'alt' => 'SPARTAN Logo',
             'class' => '',
-            'width' => 50,
-            'height' => 50,
+            'width' => 200, // Sesuaikan ukurannya
+            'height' => 100, // Sesuaikan ukurannya
         ],
     ],
 
@@ -257,7 +257,7 @@ return [
     */
 
     'use_route_url' => false,
-    'dashboard_url' => 'home',
+    'dashboard_url' => '#',
     'logout_url' => 'logout',
     'login_url' => 'login',
     'register_url' => 'register',
@@ -298,101 +298,119 @@ return [
     |
     */
 
-    'menu' => [
-        // Navbar items:
-        [
-            'type' => 'navbar-search',
-            'text' => 'search',
-            'topnav_right' => true,
-        ],
-        [
-            'type' => 'fullscreen-widget',
-            'topnav_right' => true,
-        ],
+// config/adminlte.php
 
-        // Sidebar items:
-        [
-            'type' => 'sidebar-menu-search',
-            'text' => 'search',
-        ],
-        [
-            'text' => 'blog',
-            'url' => 'admin/blog',
-            'can' => 'manage-blog',
-        ],
-        [
-            'text' => 'pages',
-            'url' => 'admin/pages',
-            'icon' => 'far fa-fw fa-file',
-            'label' => 4,
-            'label_color' => 'success',
-        ],
-        ['header' => 'account_settings'],
-        [
-            'text' => 'profile',
-            'url' => 'admin/settings',
-            'icon' => 'fas fa-fw fa-user',
-        ],
-        [
-            'text' => 'change_password',
-            'url' => 'admin/settings',
-            'icon' => 'fas fa-fw fa-lock',
-        ],
-        [
-            'text' => 'multilevel',
-            'icon' => 'fas fa-fw fa-share',
-            'submenu' => [
-                [
-                    'text' => 'level_one',
-                    'url' => '#',
-                ],
-                [
-                    'text' => 'level_one',
-                    'url' => '#',
-                    'submenu' => [
-                        [
-                            'text' => 'level_two',
-                            'url' => '#',
-                        ],
-                        [
-                            'text' => 'level_two',
-                            'url' => '#',
-                            'submenu' => [
-                                [
-                                    'text' => 'level_three',
-                                    'url' => '#',
-                                ],
-                                [
-                                    'text' => 'level_three',
-                                    'url' => '#',
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-                [
-                    'text' => 'level_one',
-                    'url' => '#',
-                ],
-            ],
-        ],
-        ['header' => 'labels'],
-        [
-            'text' => 'important',
-            'icon_color' => 'red',
-            'url' => '#',
-        ],
-        [
-            'text' => 'warning',
-            'icon_color' => 'yellow',
-            'url' => '#',
-        ],
-        [
-            'text' => 'information',
-            'icon_color' => 'cyan',
-            'url' => '#',
-        ],
+'menu' => [
+    // Main Dashboard Link
+    [
+        'text' => 'Dashboard',
+        'route'  => 'admin.home',
+        'icon' => 'fas fa-fw fa-tachometer-alt',
+        'can'  => 'view-dashboard',
     ],
+
+    // Master Data Section (Hanya Super Admin)
+    [
+        'header' => 'MASTER DATA',
+        'can' => 'is-super-admin', // Gate untuk Super Admin
+    ],
+    [ 'text' => 'Brand', 'route'  => 'admin.brands.index', 'icon' => 'fas fa-fw fa-copyright', 'can' => 'is-super-admin' ],
+    [ 'text' => 'Kategori', 'route'  => 'admin.categories.index', 'icon' => 'fas fa-fw fa-tags', 'can' => 'is-super-admin' ],
+    [ 'text' => 'Gudang', 'route'  => 'admin.gudangs.index', 'icon' => 'fas fa-fw fa-warehouse', 'can' => 'is-super-admin' ],
+    [ 'text' => 'Rak', 'route'  => 'admin.raks.index', 'icon' => 'fas fa-fw fa-pallet', 'can' => 'is-super-admin' ],
+    [ 'text' => 'Supplier', 'route'  => 'admin.suppliers.index', 'icon' => 'fas fa-fw fa-truck', 'can' => 'is-super-admin' ],
+
+    // Master Produk Section
+    [
+        'header' => 'MASTER PRODUK',
+        'can' => ['is-super-admin', 'is-manager', 'is-kepala-gudang', 'is-pj-gudang', 'is-sales'], // Semua peran internal bisa lihat
+    ],
+    [ 'text' => 'Part', 'route'  => 'admin.parts.index', 'icon' => 'fas fa-fw fa-cogs', 'can' => ['is-super-admin', 'is-manager', 'is-kepala-gudang', 'is-pj-gudang', 'is-sales'] ],
+
+    // Marketing Section
+    [
+        'header' => 'MARKETING & PROMOSI',
+        'can' => ['is-manager'], // Hanya Manajer Area (dan Super Admin)
+    ],
+    [ 'text' => 'Manajemen Campaign', 'route'  => 'admin.campaigns.index', 'icon' => 'fas fa-fw fa-bullhorn', 'can' => ['is-manager'] ],
+
+    // Transaksi Gudang Section
+    [
+        'header' => 'TRANSAKSI GUDANG',
+        'can' => ['is-kepala-gudang', 'is-staff-gudang'], // Hanya Kepala Gudang & semua Staf Gudang
+    ],
+    [
+        'text' => 'Purchase Order (PO)',
+        'route'  => 'admin.purchase-orders.index',
+        'icon' => 'fas fa-fw fa-shopping-cart',
+        'can' => 'create-po'
+    ],
+    [
+        'text' => 'Penerimaan Barang',
+        'route'  => 'admin.receivings.index',
+        'icon' => 'fas fa-fw fa-box-open',
+        'can' => 'can-receive'
+    ],
+    [
+        'text' => 'Quality Control (QC)',
+        'route'  => 'admin.qc.index',
+        'icon' => 'fas fa-fw fa-check-circle',
+        'can' => 'can-qc'
+    ],
+    [
+        'text' => 'Putaway / Penyimpanan',
+        'route'  => 'admin.putaway.index',
+        'icon' => 'fas fa-fw fa-dolly-flatbed',
+        'can' => 'can-putaway'
+    ],
+    [
+        'text' => 'Adjusment Stok',
+        'route'  => 'admin.stock-adjustments.index',
+        'icon' => 'fas fa-fw fa-exchange-alt',
+        'can' => 'can-manage-stock'
+    ],
+    [
+        'text' => 'Mutasi Gudang',
+        'route'  => 'admin.stock-mutations.index',
+        'icon' => 'fas fa-fw fa-truck-loading',
+        'can' => 'can-manage-stock'
+    ],
+    [
+        'text' => 'Retur Pembelian',
+        'route'  => 'admin.purchase-returns.index',
+        'icon' => 'fas fa-fw fa-undo',
+        'can'  => 'manage-purchase-returns',
+    ],
+
+    // Laporan Section
+    [
+        'header' => 'LAPORAN',
+        'can' => ['is-manager', 'is-kepala-gudang'], // Hanya Manajer & Kepala Gudang
+    ],
+    [ 'text' => 'Kartu Stok', 'route'  => 'admin.reports.stock-card', 'icon' => 'fas fa-fw fa-file-alt', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [ 'text' => 'Stok per Gudang', 'route'  => 'admin.reports.stock-by-warehouse', 'icon' => 'fas fa-fw fa-boxes', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [ 'text' => 'Jurnal Penjualan', 'route'  => 'admin.reports.sales-journal', 'icon' => 'fas fa-fw fa-book', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [ 'text' => 'Jurnal Pembelian', 'route'  => 'admin.reports.purchase-journal', 'icon' => 'fas fa-fw fa-book-open', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [ 'text' => 'Nilai Persediaan', 'route'  => 'admin.reports.inventory-value', 'icon' => 'fas fa-fw fa-dollar-sign', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [ 'text' => 'Analisis Penjualan', 'route'  => 'admin.reports.sales-purchase-analysis', 'icon' => 'fas fa-fw fa-chart-line', 'can' => ['is-manager', 'is-kepala-gudang'] ],
+    [
+        'text' => 'Laporan Stok Keseluruhan',
+        'route'  => 'admin.reports.stock-report',
+        'icon' => 'fas fa-fw fa-boxes',
+    ],
+
+    // Pengguna & Penjualan Section
+    [
+        'header' => 'PENGGUNA & PENJUALAN',
+    ],
+    [ 'text' => 'Konsumen', 'route'  => 'admin.konsumens.index', 'icon' => 'fas fa-fw fa-users', 'can' => ['is-super-admin', 'is-sales'] ],
+    [ 'text' => 'Pengguna', 'route'  => 'admin.users.index', 'icon' => 'fas fa-fw fa-user-cog', 'can' => 'is-super-admin' ], // Hanya Super Admin
+    [ 'text' => 'Penjualan', 'route'  => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => ['is-manager', 'is-sales'] ], // Manajer & Sales
+    [ 'text' => 'Retur Penjualan', 'route'  => 'admin.sales-returns.index', 'icon' => 'fas fa-fw fa-undo', 'can'  => 'manage-sales-returns', ], // Manajer & Sales
+
+    // Logout Link
+    [ 'text' => 'Logout', 'url'  => '#', 'icon' => 'fas fa-fw fa-sign-out-alt', 'id' => 'logout-button' ],
+],
 
     /*
     |--------------------------------------------------------------------------
@@ -430,7 +448,7 @@ return [
 
     'plugins' => [
         'Datatables' => [
-            'active' => false,
+            'active' => true,
             'files' => [
                 [
                     'type' => 'js',
@@ -450,7 +468,7 @@ return [
             ],
         ],
         'Select2' => [
-            'active' => false,
+            'active' => true,
             'files' => [
                 [
                     'type' => 'js',

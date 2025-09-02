@@ -1,18 +1,25 @@
 <?php
 
 namespace Database\Seeders;
-
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     *
-     * @return void
-     */
     public function run()
     {
-        // \App\Models\User::factory(10)->create();
+        $this->call([
+            // Foundational Data
+            JabatanSeeder::class,
+            GudangSeeder::class,
+            BrandSeeder::class,
+            CategorySeeder::class,
+            RakSeeder::class,
+            QuarantineRakSeeder::class,
+            QcRakSeeder::class,
+            // Dependent Data
+            SupplierSeeder::class,
+            KonsumenSeeder::class,
+            UserSeeder::class,
+        ]);
     }
 }
