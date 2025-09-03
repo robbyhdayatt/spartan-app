@@ -15,7 +15,7 @@ class PurchaseReturnController extends Controller
     public function index()
     {
         $this->authorize('manage-purchase-returns');
-        $returns = PurchaseReturn::with(['supplier', 'receiving'])->latest()->paginate(15);
+        $returns = PurchaseReturn::with(['supplier', 'receiving'])->latest()->get();
         return view('admin.purchase_returns.index', compact('returns'));
     }
 

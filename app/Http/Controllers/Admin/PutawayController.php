@@ -20,7 +20,7 @@ class PutawayController extends Controller
         $receivings = Receiving::where('status', 'PENDING_PUTAWAY')
             ->with(['purchaseOrder.supplier', 'gudang'])
             ->latest()
-            ->paginate(15);
+            ->get();
 
         return view('admin.putaway.index', compact('receivings'));
     }

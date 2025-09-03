@@ -62,4 +62,8 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Gudang::class);
     }
+    public function adminlte_desc()
+    {
+        return $this->jabatan->nama_jabatan ?? 'N/A';
+    }
 }

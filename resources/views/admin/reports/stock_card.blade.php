@@ -2,6 +2,8 @@
 
 @section('title', 'Laporan Kartu Stok')
 
+@section('plugins.Datatables', true)
+
 @section('content_header')
     <h1>Laporan Kartu Stok</h1>
 @stop
@@ -41,7 +43,7 @@
             <h3 class="card-title">Riwayat Pergerakan Stok</h3>
         </div>
         <div class="card-body">
-            <table class="table table-bordered table-striped">
+            <table id="stock-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th>Tanggal</th>
@@ -88,6 +90,10 @@
     $(document).ready(function() {
         $('#part_id').select2({
             placeholder: "--- Pilih Spare Part ---"
+        });
+        $('#stock-table').DataTable({
+            "responsive": true,
+            "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
         });
     });
 </script>

@@ -2,6 +2,8 @@
 
 @section('title', 'Laporan Jurnal Penjualan')
 
+@section('plugins.Datatables', true)
+
 @section('content_header')
     <h1>Laporan Jurnal Penjualan</h1>
 @stop
@@ -50,7 +52,7 @@
             </div>
         </div>
         <div class="card-body">
-            <table class="table table-bordered table-striped">
+            <table id="sales-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th>Tanggal</th>
@@ -82,4 +84,15 @@
             </table>
         </div>
     </div>
+@stop
+
+@section('js')
+<script>
+    $(document).ready(function() {
+        $('#sales-table').DataTable({
+            "responsive": true,
+            "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
+        });
+    });
+</script>
 @stop

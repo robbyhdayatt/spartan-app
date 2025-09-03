@@ -134,11 +134,11 @@ return [
     */
 
     'usermenu_enabled' => true,
-    'usermenu_header' => false,
+    'usermenu_header' => true,
     'usermenu_header_class' => 'bg-primary',
     'usermenu_image' => false,
-    'usermenu_desc' => false,
-    'usermenu_profile_url' => false,
+    'usermenu_desc' => true,
+    
 
     /*
     |--------------------------------------------------------------------------
@@ -196,9 +196,9 @@ return [
     'classes_content_wrapper' => '',
     'classes_content_header' => '',
     'classes_content' => '',
-    'classes_sidebar' => 'sidebar-dark-primary elevation-4',
+    'classes_sidebar' => 'sidebar-light-yamaha elevation-4',
     'classes_sidebar_nav' => '',
-    'classes_topnav' => 'navbar-white navbar-light',
+    'classes_topnav'  => 'navbar-white navbar-light',
     'classes_topnav_nav' => 'navbar-expand',
     'classes_topnav_container' => 'container',
 
@@ -298,10 +298,18 @@ return [
     |
     */
 
-// config/adminlte.php
+    // config/adminlte.php
 
-'menu' => [
-    // Main Dashboard Link
+    'menu' => [
+
+    [
+        'text' => 'Logout',
+        'url'  => '#', // URL dummy
+        'icon' => 'fas fa-fw fa-sign-out-alt',
+        'id'   => 'logout-button',
+        'topnav_right' => true, // Ini akan memindahkannya ke kanan atas
+    ],
+        // Main Dashboard Link
     [
         'text' => 'Dashboard',
         'route'  => 'admin.home',
@@ -408,9 +416,7 @@ return [
     [ 'text' => 'Penjualan', 'route'  => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => ['is-manager', 'is-sales'] ], // Manajer & Sales
     [ 'text' => 'Retur Penjualan', 'route'  => 'admin.sales-returns.index', 'icon' => 'fas fa-fw fa-undo', 'can'  => 'manage-sales-returns', ], // Manajer & Sales
 
-    // Logout Link
-    [ 'text' => 'Logout', 'url'  => '#', 'icon' => 'fas fa-fw fa-sign-out-alt', 'id' => 'logout-button' ],
-],
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -483,7 +489,7 @@ return [
             ],
         ],
         'Chartjs' => [
-            'active' => false,
+            'active' => true,
             'files' => [
                 [
                     'type' => 'js',
@@ -493,7 +499,7 @@ return [
             ],
         ],
         'Sweetalert2' => [
-            'active' => false,
+            'active' => true,
             'files' => [
                 [
                     'type' => 'js',
@@ -517,6 +523,7 @@ return [
                 ],
             ],
         ],
+
     ],
 
     /*
@@ -565,4 +572,5 @@ return [
     */
 
     'livewire' => false,
+
 ];

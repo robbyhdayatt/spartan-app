@@ -13,7 +13,7 @@ class ReceivingController extends Controller
 {
     public function index()
     {
-        $receivings = Receiving::with(['purchaseOrder', 'gudang', 'receivedBy'])->latest()->paginate(15);
+        $receivings = Receiving::with(['purchaseOrder', 'gudang', 'receivedBy'])->latest()->get();
         return view('admin.receivings.index', compact('receivings'));
     }
 

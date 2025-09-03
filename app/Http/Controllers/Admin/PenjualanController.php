@@ -19,7 +19,7 @@ class PenjualanController extends Controller
 {
     public function index()
     {
-        $penjualans = Penjualan::with(['konsumen', 'sales'])->latest()->paginate(15);
+        $penjualans = Penjualan::with(['konsumen', 'sales'])->latest()->get();
         return view('admin.penjualans.index', compact('penjualans'));
     }
 

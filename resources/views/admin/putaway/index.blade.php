@@ -12,19 +12,13 @@
         <h3 class="card-title">Barang Lolos QC yang Siap Disimpan</h3>
     </div>
     <div class="card-body">
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-            </div>
-        @endif
          @if(session('error'))
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 {{ session('error') }}
                 <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
         @endif
-        <table class="table table-bordered">
+        <table id="putaway-table" class="table table-bordered">
             <thead>
                 <tr>
                     <th>No. Penerimaan</th>
@@ -53,8 +47,15 @@
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">
-        {{ $receivings->links() }}
-    </div>
 </div>
+@stop
+
+@section('js')
+<script>
+    $(document).ready(function() {
+        $('#putaway-table').DataTable({
+            "responsive": true,
+        });
+    });
+</script>
 @stop

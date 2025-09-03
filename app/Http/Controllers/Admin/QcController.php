@@ -19,7 +19,7 @@ class QcController extends Controller
         $receivings = Receiving::where('status', 'PENDING_QC')
             ->with(['purchaseOrder.supplier', 'gudang'])
             ->latest()
-            ->paginate(15);
+            ->get();
 
         return view('admin.qc.index', compact('receivings'));
     }

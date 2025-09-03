@@ -17,12 +17,6 @@
             </div>
         </div>
         <div class="card-body">
-            @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    {{ session('success') }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                </div>
-            @endif
              @if(session('error'))
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     {{ session('error') }}
@@ -40,7 +34,7 @@
                 </div>
             @endif
 
-            <table class="table table-bordered">
+            <table id="parts-table" class="table table-bordered">
                 <thead>
                     <tr>
                         <th>Nama</th>
@@ -83,9 +77,6 @@
                     @endforeach
                 </tbody>
             </table>
-        </div>
-        <div class="card-footer clearfix">
-            {{ $users->links() }}
         </div>
     </div>
 
@@ -256,6 +247,10 @@
             $('#edit_jabatan_id').val(user.jabatan_id);
             $('#edit_gudang_id').val(user.gudang_id);
             $('#edit_is_active').val(user.is_active);
+        });
+
+        $('#parts-table').DataTable({
+            "responsive": true,
         });
 
         // Tampilkan modal jika ada error validasi

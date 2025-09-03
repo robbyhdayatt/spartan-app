@@ -15,7 +15,7 @@ class StockAdjustmentController extends Controller
 {
     public function index()
     {
-        $adjustments = StockAdjustment::with(['part', 'gudang', 'createdBy', 'approvedBy'])->latest()->paginate(15);
+        $adjustments = StockAdjustment::with(['part', 'gudang', 'createdBy', 'approvedBy'])->latest()->get();
         return view('admin.stock_adjustments.index', compact('adjustments'));
     }
 

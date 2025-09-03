@@ -2,6 +2,8 @@
 
 @section('title', 'Laporan Nilai Persediaan')
 
+@section('plugins.Datatables', true)
+
 @section('content_header')
     <h1>Laporan Nilai Persediaan</h1>
 @stop
@@ -31,7 +33,7 @@
             </div>
         </div>
         <div class="card-body">
-            <table class="table table-bordered table-striped">
+            <table id="inventory-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th>Gudang</th>
@@ -61,4 +63,15 @@
             </table>
         </div>
     </div>
+@stop
+
+@section('js')
+<script>
+    $(document).ready(function() {
+        $('#inventory-table').DataTable({
+            "responsive": true,
+            "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
+        });
+    });
+</script>
 @stop

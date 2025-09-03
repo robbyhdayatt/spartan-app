@@ -181,7 +181,7 @@ class ReportController extends Controller
     }
     public function stockReport()
     {
-        $stocks = \App\Models\Part::withSum('inventories', 'quantity')->latest()->paginate(20);
+        $stocks = \App\Models\Part::withSum('inventories', 'quantity')->latest()->get();
         return view('admin.reports.stock_report', compact('stocks'));
     }
 }

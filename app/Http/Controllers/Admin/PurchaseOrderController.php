@@ -16,9 +16,7 @@ class PurchaseOrderController extends Controller
     public function index()
     {
         // Eager load relationships for efficiency
-        $purchaseOrders = PurchaseOrder::with(['supplier', 'gudang', 'createdBy'])
-            ->latest()
-            ->paginate(15);
+        $purchaseOrders = PurchaseOrder::with(['supplier', 'gudang', 'createdBy'])->latest()->get();
 
         return view('admin.purchase_orders.index', compact('purchaseOrders'));
     }

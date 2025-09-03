@@ -11,7 +11,7 @@
     </div>
     <div class="card-body">
         {{-- Session messages and errors --}}
-        <table class="table table-bordered">
+        <table id="campaigns-table" class="table table-bordered">
             <thead>
                 <tr>
                     <th>Nama Campaign</th>
@@ -46,7 +46,6 @@
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">{{ $campaigns->links() }}</div>
 </div>
 
 @include('admin.campaigns.modals', ['parts' => $parts])
@@ -68,6 +67,10 @@ $(document).ready(function() {
             priceInfo.text(priceLabel + new Intl.NumberFormat('id-ID').format(defaultPrice));
         } else { priceInfo.text(''); }
     }
+
+    $('#campaigns-table').DataTable({
+            "responsive": true,
+    });
 
     // Initialize Select2
     $('#createModal .part-select, #editModal .part-select').select2({ dropdownParent: $(this).closest('.modal') });

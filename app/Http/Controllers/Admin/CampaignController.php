@@ -12,7 +12,7 @@ class CampaignController extends Controller
 {
     public function index()
     {
-        $campaigns = Campaign::with('part')->latest()->paginate(15);
+        $campaigns = Campaign::with('part')->latest()->get();
         $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
         return view('admin.campaigns.index', compact('campaigns', 'parts'));
     }

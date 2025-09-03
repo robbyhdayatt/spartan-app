@@ -10,7 +10,7 @@ class KonsumenController extends Controller
 {
     public function index()
     {
-        $konsumens = Konsumen::latest()->paginate(10);
+        $konsumens = Konsumen::latest()->get();
         return view('admin.konsumens.index', compact('konsumens'));
     }
 

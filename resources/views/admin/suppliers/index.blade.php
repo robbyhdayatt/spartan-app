@@ -17,13 +17,6 @@
             </div>
         </div>
         <div class="card-body">
-            @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    {{ session('success') }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                </div>
-            @endif
-
             @if ($errors->any())
                 <div class="alert alert-danger">
                     <ul class="mb-0">
@@ -34,7 +27,7 @@
                 </div>
             @endif
 
-            <table class="table table-bordered">
+            <table id="suppliers-table" class="table table-bordered">
                 <thead>
                     <tr>
                         <th>Kode</th>
@@ -83,9 +76,6 @@
                     @endforeach
                 </tbody>
             </table>
-        </div>
-        <div class="card-footer clearfix">
-            {{ $suppliers->links() }}
         </div>
     </div>
 
@@ -234,6 +224,10 @@
             $('#edit_email').val(email);
             $('#edit_pic_nama').val(pic_nama);
             $('#edit_is_active').val(is_active);
+        });
+
+        $('#suppliers-table').DataTable({
+            "responsive": true,
         });
 
         // Show the correct modal if there are validation errors

@@ -12,13 +12,7 @@
         </div>
     </div>
     <div class="card-body">
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-            </div>
-        @endif
-        <table class="table table-bordered">
+        <table id="purchase_returns-table" class="table table-bordered">
             <thead>
                 <tr>
                     <th>No. Retur</th>
@@ -47,8 +41,15 @@
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">
-        {{ $returns->links() }}
-    </div>
 </div>
+@stop
+
+@section('js')
+<script>
+    $(document).ready(function() {
+        $('#purchase_returns-table').DataTable({
+            "responsive": true,
+        });
+    });
+</script>
 @stop

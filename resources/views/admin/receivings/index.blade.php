@@ -15,13 +15,7 @@
         </div>
     </div>
     <div class="card-body">
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ session('success') }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-            </div>
-        @endif
-        <table class="table table-bordered">
+        <table id="receivings-table" class="table table-bordered">
             <thead>
                 <tr>
                     <th>No. Penerimaan</th>
@@ -52,8 +46,15 @@
             </tbody>
         </table>
     </div>
-    <div class="card-footer clearfix">
-        {{ $receivings->links() }}
-    </div>
 </div>
+@stop
+
+@section('js')
+<script>
+    $(document).ready(function() {
+        $('#receivings-table').DataTable({
+            "responsive": true,
+        });
+    });
+</script>
 @stop

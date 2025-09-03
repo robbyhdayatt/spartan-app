@@ -14,7 +14,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::with(['jabatan', 'gudang'])->latest()->paginate(10);
+        $users = User::with(['jabatan', 'gudang'])->latest()->get();
         $jabatans = Jabatan::where('is_active', true)->orderBy('nama_jabatan')->get();
         $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         return view('admin.users.index', compact('users', 'jabatans', 'gudangs'));
