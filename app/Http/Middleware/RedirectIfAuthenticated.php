@@ -17,24 +17,15 @@ class RedirectIfAuthenticated
      * @param  string|null  ...$guards
      * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
      */
+
     public function handle(Request $request, Closure $next, ...$guards)
     {
         $guards = empty($guards) ? [null] : $guards;
 
         foreach ($guards as $guard) {
             if (Auth::guard($guard)->check()) {
-                /** @var \App\Models\User $user */
-                $user = Auth::user();
-                $menu = config('adminlte.menu');
-
-                foreach ($menu as $item) {
-                    if (isset($item['route']) && $item['route'] !== '#') {
-                        if ($user->can($item['can'] ?? true)) {
-                            return redirect()->route($item['route']);
-                        }
-                    }
-                }
-                return redirect('/admin/home');
+                // Cukup arahkan ke /home standar, sisanya akan ditangani oleh route
+                return redirect(RouteServiceProvider::HOME);
             }
         }
 

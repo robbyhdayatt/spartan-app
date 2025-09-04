@@ -23,18 +23,7 @@ class LoginController extends Controller
 
     protected function redirectTo()
     {
-        /** @var \App\Models\User $user */
-        $user = auth()->user();
-        $menu = config('adminlte.menu');
-
-        foreach ($menu as $item) {
-            if (isset($item['route']) && $item['route'] !== '#') {
-                if ($user->can($item['can'] ?? true)) {
-                    return route($item['route']);
-                }
-            }
-        }
-        return '/admin/home';
+        return route('admin.profile.show');
     }
 
     /**

@@ -1,79 +1,82 @@
-@extends('layouts.app')
+@extends('adminlte::auth.auth-page', ['auth_type' => 'login'])
 
-@section('content')
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">{{ __('Login') }}</div>
+@section('title', 'Login - SPARTAN')
 
-                <div class="card-body">
-                    <form method="POST" action="{{ route('login') }}">
-                        @csrf
+@section('auth_header')
+    {{-- Biarkan kosong --}}
+@stop
 
-                        <div class="row mb-3">
-                            <label for="username" class="col-md-4 col-form-label text-md-end">{{ __('Username') }}</label>
-                            <div class="col-md-6">
-                                <div class="input-group">
-                                    <input id="username" type="text" name="username" class="form-control @error('username') is-invalid @enderror" placeholder="Username" value="{{ old('username') }}" required autofocus>
-                                    <span class="input-group-text">
-                                        <i class="fas fa-user"></i>
-                                    </span>
-                                </div>
-                                @error('username')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                @enderror
-                            </div>
+@section('auth_body')
+    <div class="card card-outline card-primary">
+        <div class="card-header text-center">
+            <a href="#" class="h1">
+                <img src="{{ asset('img/logo_perusahaan.png') }}" alt="SPARTAN Logo"
+                     style="max-height: 120px; width: auto; display: block; margin: 0 auto 10px auto;">
+                <b>SPARTAN</b>
+            </a>
+            <p class="login-box-msg mt-3">Sistem Informasi Part & Transaksi Yamaha LTI</p>
+        </div>
+        <div class="card-body">
+            <form action="{{ route('login') }}" method="post">
+                @csrf
+
+                {{-- Username field --}}
+                <div class="input-group mb-3">
+                    <input type="text" name="username" class="form-control @error('username') is-invalid @enderror"
+                           value="{{ old('username') }}" placeholder="Username" autofocus>
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-user"></span>
                         </div>
-
-                        <div class="row mb-3">
-                            <label for="password" class="col-md-4 col-form-label text-md-end">{{ __('Password') }}</label>
-                            <div class="col-md-6">
-                                <div class="input-group">
-                                    <input id="password" type="password" class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password">
-                                    <span class="input-group-text">
-                                        <i class="fas fa-lock"></i>
-                                    </span>
-                                </div>
-                                @error('password')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                @enderror
-                            </div>
-                        </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-6 offset-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>
-
-                                    <label class="form-check-label" for="remember">
-                                        {{ __('Remember Me') }}
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row mb-0">
-                            <div class="col-md-8 offset-md-4">
-                                <button type="submit" class="btn btn-primary">
-                                    {{ __('Login') }}
-                                </button>
-
-                                @if (Route::has('password.request'))
-                                    <a class="btn btn-link" href="{{ route('password.request') }}">
-                                        {{ __('Forgot Your Password?') }}
-                                    </a>
-                                @endif
-                            </div>
-                        </div>
-                    </form>
+                    </div>
+                    @error('username')
+                        <span class="invalid-feedback" role="alert">
+                            <strong>{{ $message }}</strong>
+                        </span>
+                    @enderror
                 </div>
-            </div>
+
+                {{-- Password field --}}
+                <div class="input-group mb-3">
+                    <input type="password" name="password" class="form-control @error('password') is-invalid @enderror"
+                           placeholder="Password">
+                    <div class="input-group-append">
+                        <div class="input-group-text">
+                            <span class="fas fa-lock"></span>
+                        </div>
+                    </div>
+                    @error('password')
+                        <span class="invalid-feedback" role="alert">
+                            <strong>{{ $message }}</strong>
+                        </span>
+                    @enderror
+                </div>
+
+                {{-- Sign In button --}}
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-block {{ config('adminlte.classes_auth_btn', 'btn-flat btn-primary') }}">
+                            <span class="fas fa-sign-in-alt"></span>
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
-</div>
+@stop
+
+@section('auth_footer')
+    {{-- Kosongkan footer --}}
+@stop
+
+@section('adminlte_css')
+    <style>
+        /* ========================================================== */
+        /* PERBAIKAN FINAL ADA DI SINI */
+        /* ========================================================== */
+        .login-logo {
+            display: none !important; /* Paksa untuk sembunyi */
+        }
+    </style>
 @endsection

@@ -84,7 +84,7 @@ return [
     */
 
     'auth_logo' => [
-        'enabled' => true, // Aktifkan
+        'enabled' => false, // Aktifkan
         'img' => [
             'path' => 'img/logo_perusahaan_besar.png', // Ganti dengan logo yang lebih besar
             'alt' => 'SPARTAN Logo',
@@ -133,12 +133,12 @@ return [
     |
     */
 
-    'usermenu_enabled' => true,
-    'usermenu_header' => true,
+    'usermenu_enabled' => false,
+    'usermenu_header' => false,
     'usermenu_header_class' => 'bg-primary',
     'usermenu_image' => false,
     'usermenu_desc' => true,
-    
+
 
     /*
     |--------------------------------------------------------------------------
@@ -171,7 +171,7 @@ return [
     |
     */
 
-    'classes_auth_card' => 'card-outline card-primary',
+    'classes_auth_card' => '',
     'classes_auth_header' => '',
     'classes_auth_body' => '',
     'classes_auth_footer' => '',
@@ -303,11 +303,8 @@ return [
     'menu' => [
 
     [
-        'text' => 'Logout',
-        'url'  => '#', // URL dummy
-        'icon' => 'fas fa-fw fa-sign-out-alt',
-        'id'   => 'logout-button',
-        'topnav_right' => true, // Ini akan memindahkannya ke kanan atas
+        'type'         => 'fullscreen-widget',
+        'topnav_right' => true,
     ],
         // Main Dashboard Link
     [
@@ -315,6 +312,12 @@ return [
         'route'  => 'admin.home',
         'icon' => 'fas fa-fw fa-tachometer-alt',
         'can'  => 'view-dashboard',
+    ],
+
+    [
+        'text' => 'Profil Saya',
+        'route'  => 'admin.profile.show',
+        'icon' => 'fas fa-fw fa-user',
     ],
 
     // Master Data Section (Hanya Super Admin)
@@ -416,7 +419,25 @@ return [
     [ 'text' => 'Penjualan', 'route'  => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => ['is-manager', 'is-sales'] ], // Manajer & Sales
     [ 'text' => 'Retur Penjualan', 'route'  => 'admin.sales-returns.index', 'icon' => 'fas fa-fw fa-undo', 'can'  => 'manage-sales-returns', ], // Manajer & Sales
 
+    ['header' => 'MARKETING & PROMOSI'],
+    // ... (Manajemen Campaign)
+    [
+        'text'    => 'Insentif Sales',
+        'icon'    => 'fas fa-fw fa-gift',
+        'can'     => 'is-manager', // Hanya Manajer Area
+        'submenu' => [
+            [
+                'text' => 'Set Target Penjualan',
+                'route'  => 'admin.incentives.targets',
+            ],
+            [
+                'text' => 'Laporan Insentif',
+                'route'  => 'admin.incentives.report',
+            ],
+        ],
     ],
+
+],
 
     /*
     |--------------------------------------------------------------------------
