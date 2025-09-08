@@ -93,7 +93,9 @@ class QcController extends Controller
             }
 
             // Update the main receiving record status
-            $receiving->status = 'COMPLETED'; // Now it's completed because all stock is accounted for
+            $receiving->status = 'PENDING_PUTAWAY';
+            $receiving->qc_by = Auth::id();
+            $receiving->qc_at = now();
             $receiving->save();
 
             DB::commit();

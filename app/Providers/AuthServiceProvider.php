@@ -53,14 +53,18 @@ class AuthServiceProvider extends ServiceProvider
             return $user->jabatan->nama_jabatan === 'PJ Gudang';
         });
 
+        Gate::define('view-purchase-orders', function (User $user) {
+            return in_array($user->jabatan->nama_jabatan, ['Kepala Gudang', 'PJ Gudang']);
+        });
+
         Gate::define('can-receive', function(User $user) {
-            return in_array($user->jabatan->nama_jabatan, ['Staff Receiving', 'PJ Gudang', 'Kepala Gudang']);
+            return in_array($user->jabatan->nama_jabatan, ['Staff Receiving', 'PJ Gudang']);
         });
         Gate::define('can-qc', function(User $user) {
-            return in_array($user->jabatan->nama_jabatan, ['Staff QC', 'PJ Gudang', 'Kepala Gudang']);
+            return in_array($user->jabatan->nama_jabatan, ['Staff QC', 'PJ Gudang']);
         });
         Gate::define('can-putaway', function(User $user) {
-            return in_array($user->jabatan->nama_jabatan, ['Staff Putaway', 'PJ Gudang', 'Kepala Gudang']);
+            return in_array($user->jabatan->nama_jabatan, ['Staff Putaway', 'PJ Gudang']);
         });
         Gate::define('can-manage-stock', function(User $user) {
             return in_array($user->jabatan->nama_jabatan, ['Staff Stock Control', 'PJ Gudang', 'Kepala Gudang']);

@@ -23,7 +23,7 @@
             <div class="row">
                 <div class="col-md-6 form-group">
                     <label>Pilih Purchase Order (PO)</label>
-                    <select id="po-select" name="purchase_order_id" class="form-control" required>
+                    <select id="po-select" name="purchase_order_id" class="form-control select2" required>
                         <option value="" disabled selected>--- Pilih PO yang sudah disetujui ---</option>
                         @foreach($purchaseOrders as $po)
                         <option value="{{ $po->id }}">{{ $po->nomor_po }} - {{ $po->supplier->nama_supplier }}</option>
@@ -51,7 +51,7 @@
                     </tr>
                 </thead>
                 <tbody id="receiving-items-table">
-                    {{-- Items will be loaded here by JavaScript --}}
+                    {{-- Baris akan diisi oleh JavaScript --}}
                 </tbody>
             </table>
         </div>
@@ -66,12 +66,19 @@
 @section('js')
 <script>
 $(document).ready(function() {
+    // Inisialisasi Select2
+    $('.select2').select2();
+
     $('#po-select').on('change', function() {
         let poId = $(this).val();
-        let url = `/admin/api/purchase-orders/${poId}`;
         let tableBody = $('#receiving-items-table');
 
-        tableBody.html('<tr><td colspan="3" class="text-center">Loading...</td></tr>');
+        // Ganti URL menjadi dinamis menggunakan route() Laravel
+        // Ini adalah cara yang paling aman
+        let url = "{{ route('admin.api.po.details', ['purchaseOrder' => ':poId']) }}";
+        url = url.replace(':poId', poId);
+
+        tableBody.html('<tr><td colspan="3" class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading...</td></tr>');
 
         if (poId) {
             $.getJSON(url, function(data) {
@@ -82,15 +89,22 @@ $(document).ready(function() {
                             <tr>
                                 <td>
                                     ${item.part.nama_part} (${item.part.kode_part})
-                                    <input type="hidden" name="items[${item.part.id}][part_id]" value="${item.part.id}">
+                                    <input type="hidden" name="items[${item.part_id}][part_id]" value="${item.part_id}">
                                 </td>
                                 <td><input type="text" class="form-control" value="${item.qty_pesan}" readonly></td>
-                                <td><input type="number" name="items[${item.part.id}][qty_terima]" class="form-control" min="0" value="${item.qty_pesan}" required></td>
+                                <td><input type="number" name="items[${item.part_id}][qty_terima]" class="form-control" min="0" value="${item.qty_pesan - item.qty_diterima}" required></td>
                             </tr>
                         `;
                         tableBody.append(row);
                     });
+                } else {
+                    tableBody.html('<tr><td colspan="3" class="text-center text-danger">Gagal memuat data detail PO.</td></tr>');
                 }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                // Tambahkan ini untuk melihat error jika terjadi
+                console.error("AJAX Error:", textStatus, errorThrown);
+                console.error("Response Text:", jqXHR.responseText);
+                tableBody.html('<tr><td colspan="3" class="text-center text-danger">Terjadi kesalahan saat mengambil data. Periksa console browser untuk detail.</td></tr>');
             });
         } else {
             tableBody.empty();

@@ -11,7 +11,7 @@
         <form action="{{ route('admin.purchase-orders.store') }}" method="POST" id="po-form">
             @csrf
             <div class="card-body">
-                 @if ($errors->any())
+                @if ($errors->any())
                     <div class="alert alert-danger">
                         <ul class="mb-0">
                             @foreach ($errors->all() as $error)
@@ -37,7 +37,6 @@
                     </div>
                     <div class="col-md-4 form-group">
                         <label>Tujuan Gudang</label>
-                        {{-- Logika baru: Cek jumlah gudang yang tersedia --}}
                         @if(count($gudangs) === 1)
                             <input type="text" class="form-control" value="{{ $gudangs->first()->nama_gudang }}" readonly>
                             <input type="hidden" name="gudang_id" value="{{ $gudangs->first()->id }}">
@@ -56,23 +55,51 @@
                     <textarea name="catatan" class="form-control" rows="2"></textarea>
                 </div>
 
+                {{-- PPN Checkbox --}}
+                <div class="form-group">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="use_ppn" name="use_ppn" value="1">
+                        <label class="custom-control-label" for="use_ppn">Gunakan PPN 11%</label>
+                    </div>
+                </div>
+
+
                 {{-- PO Items Table --}}
                 <h5 class="mt-4">Item Sparepart</h5>
                 <hr>
-                <table class="table table-bordered">
-                    <thead>
-                        <tr>
-                            <th>Part</th>
-                            <th style="width: 120px">Qty</th>
-                            <th style="width: 200px">Harga Beli (Rp)</th>
-                            <th style="width: 200px">Subtotal (Rp)</th>
-                            <th style="width: 50px"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="po-items-table">
-                        {{-- Items will be added here by JavaScript --}}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Part</th>
+                                <th style="width: 120px">Qty</th>
+                                <th style="width: 200px">Harga Beli (Rp)</th>
+                                <th style="width: 200px">Subtotal (Rp)</th>
+                                <th style="width: 50px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="po-items-table">
+                            {{-- Items will be added here by JavaScript --}}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="3" class="text-right">Subtotal</th>
+                                <th id="subtotal">Rp 0</th>
+                                <th></th>
+                            </tr>
+                            <tr id="ppn-row" style="display: none;">
+                                <th colspan="3" class="text-right">PPN (11%)</th>
+                                <th id="ppn">Rp 0</th>
+                                <th></th>
+                            </tr>
+                            <tr>
+                                <th colspan="3" class="text-right">Grand Total</th>
+                                <th id="grand-total">Rp 0</th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
                 <button type="button" class="btn btn-success btn-sm" id="add-item-btn">+ Tambah Item</button>
             </div>
             <div class="card-footer">
@@ -86,7 +113,7 @@
     <template id="po-item-template">
         <tr>
             <td>
-                <select class="form-control item-part select2 select2-part" name="items[__INDEX__][part_id]" required style="width: 100%;">
+                <select class="form-control item-part select2-part" name="items[__INDEX__][part_id]" required style="width: 100%;">
                     <option value="" disabled selected>Pilih Part</option>
                     @foreach($parts as $part)
                     <option value="{{ $part->id }}" data-harga="{{ $part->effective_price }}">{{ $part->nama_part }} ({{ $part->kode_part }})</option>
@@ -104,85 +131,132 @@
 @section('js')
     <script>
         $(document).ready(function() {
-            $('#createModal .select2').select2({ dropdownParent: $('#createModal') });
-            $('#editModal .select2').select2({ dropdownParent: $('#editModal') });
-            $('.select2').select2(); // inisialisasi awal
+            // Inisialisasi Select2 untuk header
+            $('.select2').select2();
 
             let itemIndex = 0;
 
-            // Fungsi untuk refresh semua dropdown part (disable part yg sudah dipilih)
+            // Fungsi untuk format Rupiah
+            function formatRupiah(angka) {
+                return new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 0
+                }).format(angka);
+            }
+
+            // Fungsi untuk menghitung total keseluruhan
+            function calculateGrandTotal() {
+                let subtotal = 0;
+                $('#po-items-table tr').each(function() {
+                    const itemSubtotal = parseFloat($(this).find('.item-subtotal').attr('data-value')) || 0;
+                    subtotal += itemSubtotal;
+                });
+
+                $('#subtotal').text(formatRupiah(subtotal));
+
+                let pajak = 0;
+                if ($('#use_ppn').is(':checked')) {
+                    $('#ppn-row').show();
+                    pajak = subtotal * 0.11;
+                } else {
+                    $('#ppn-row').hide();
+                }
+                $('#ppn').text(formatRupiah(pajak));
+
+                const grandTotal = subtotal + pajak;
+                $('#grand-total').text(formatRupiah(grandTotal));
+            }
+
+            // Fungsi untuk menghitung subtotal per baris
+            function calculateRowSubtotal(row) {
+                let harga = parseFloat(row.find('.item-harga').val()) || 0;
+                let qty = parseInt(row.find('.item-qty').val()) || 0;
+                let subtotal = qty * harga;
+
+                row.find('.item-subtotal').val(subtotal.toLocaleString('id-ID')).attr('data-value', subtotal);
+
+                calculateGrandTotal();
+            }
+
+            // **BARU**: Fungsi untuk menonaktifkan part yang sudah dipilih
             function refreshPartOptions() {
-                // ambil semua part_id yang sudah dipilih
                 let selectedParts = [];
                 $('.item-part').each(function() {
                     let val = $(this).val();
-                    if (val) selectedParts.push(val);
+                    if (val) {
+                        selectedParts.push(val);
+                    }
                 });
 
-                // reset semua option dulu (enable)
-                $('.item-part option').prop('disabled', false);
-
-                // disable option yang sudah dipilih di dropdown lain
                 $('.item-part').each(function() {
-                    let currentVal = $(this).val(); // biarkan tetap aktif di dropdown yg sedang dipakai
-                    $(this).find('option').each(function() {
-                        if (selectedParts.includes($(this).val()) && $(this).val() !== currentVal) {
-                            $(this).prop('disabled', true);
+                    let currentDropdown = $(this);
+                    let currentValue = currentDropdown.val();
+
+                    currentDropdown.find('option').each(function() {
+                        let option = $(this);
+                        let optionValue = option.val();
+
+                        // Aktifkan kembali semua opsi kecuali yang kosong
+                        if(optionValue) {
+                           option.prop('disabled', false);
+                        }
+
+                        // Nonaktifkan jika sudah dipilih di dropdown LAIN
+                        if (selectedParts.includes(optionValue) && optionValue !== currentValue) {
+                            option.prop('disabled', true);
                         }
                     });
                 });
 
-                // Refresh Select2 biar langsung kelihatan disabled
-                $('.item-part').trigger('change.select2');
+                // Refresh semua Select2 agar perubahan terlihat
+                $('.select2-part').select2({
+                     placeholder: "Pilih Part",
+                     width: '100%'
+                });
             }
 
-            // Add a new item row
+            // Fungsi untuk menambah baris item baru
             $('#add-item-btn').on('click', function() {
                 let template = $('#po-item-template').html().replace(/__INDEX__/g, itemIndex);
-                let $row = $(template);
+                let newRow = $(template);
+                $('#po-items-table').append(newRow);
 
-                // append row ke tabel
-                $('#po-items-table').append($row);
-
-                // aktifkan select2 pada dropdown part yang baru ditambahkan
-                $row.find('.select2-part').select2({
-                    width: '100%',
+                newRow.find('.select2-part').select2({
                     placeholder: "Pilih Part",
-                    allowClear: true
+                    width: '100%'
                 });
 
                 itemIndex++;
-
-                // refresh setelah tambah row
-                refreshPartOptions();
+                refreshPartOptions(); // Panggil fungsi refresh
             });
 
-            // Remove an item row
+            // Event delegation untuk menghapus baris
             $('#po-items-table').on('click', '.remove-item-btn', function() {
                 $(this).closest('tr').remove();
-                refreshPartOptions();
+                calculateGrandTotal();
+                refreshPartOptions(); // Panggil fungsi refresh
             });
 
-            // Update harga dan subtotal ketika part/qty/harga berubah
-            $('#po-items-table').on('change keyup', '.item-part, .item-qty, .item-harga', function() {
+            // Event delegation untuk perubahan pada part, qty, atau harga
+            $('#po-items-table').on('change input', '.item-part, .item-qty, .item-harga', function() {
                 let row = $(this).closest('tr');
-                let selectedPart = row.find('.item-part option:selected');
-                let harga = parseFloat(row.find('.item-harga').val()) || 0;
-                let qty = parseInt(row.find('.item-qty').val()) || 0;
 
-                // Auto-fill harga beli jika kosong
                 if ($(this).hasClass('item-part')) {
+                    let selectedPart = row.find('.item-part option:selected');
                     let defaultHarga = selectedPart.data('harga') || 0;
                     row.find('.item-harga').val(defaultHarga);
-                    harga = defaultHarga;
-
-                    // refresh opsi supaya part yg dipilih tidak bisa dipakai lagi di row lain
-                    refreshPartOptions();
+                    refreshPartOptions(); // Panggil fungsi refresh saat part diganti
                 }
 
-                let subtotal = qty * harga;
-                row.find('.item-subtotal').val(subtotal.toLocaleString('id-ID'));
+                calculateRowSubtotal(row);
             });
+
+            // Event listener untuk checkbox PPN
+            $('#use_ppn').on('change', calculateGrandTotal);
+
+            // Tambahkan baris pertama secara otomatis
+            $('#add-item-btn').click();
         });
     </script>
 @stop

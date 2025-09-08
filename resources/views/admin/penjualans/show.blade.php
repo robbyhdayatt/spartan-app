@@ -1,15 +1,18 @@
 @extends('adminlte::page')
+
 @section('title', 'Detail Penjualan')
+
 @section('content_header')
-    <h1>Faktur Penjualan: {{ $penjualan->nomor_faktur }}</h1>
+    <h1>Detail Penjualan: {{ $penjualan->nomor_faktur }}</h1>
 @stop
+
 @section('content')
 <div class="invoice p-3 mb-3">
     <div class="row">
         <div class="col-12">
             <h4>
-                <i class="fas fa-globe"></i> SPARTAN, Inc.
-                <small class="float-right">Tanggal: {{ $penjualan->tanggal_jual->format('d/m/Y') }}</small>
+                <i class="fas fa-file-invoice"></i> SpartanApp
+                <small class="float-right">Tanggal Jual: {{ \Carbon\Carbon::parse($penjualan->tanggal_jual)->format('d/m/Y') }}</small>
             </h4>
         </div>
     </div>
@@ -17,8 +20,11 @@
         <div class="col-sm-4 invoice-col">
             Dari
             <address>
-                <strong>{{ $penjualan->gudang->nama_gudang }}</strong><br>
-                Sales: {{ $penjualan->sales->nama ?? 'Tanpa Sales' }}
+                <strong>SpartanApp, Inc.</strong><br>
+                Gudang: {{ $penjualan->gudang->nama_gudang }}<br>
+                Alamat Gudang: {{ $penjualan->gudang->alamat_gudang }}<br>
+                Phone: (xxx) xxx-xxxx<br>
+                Email: info@spartan.com
             </address>
         </div>
         <div class="col-sm-4 invoice-col">
@@ -26,11 +32,14 @@
             <address>
                 <strong>{{ $penjualan->konsumen->nama_konsumen }}</strong><br>
                 {{ $penjualan->konsumen->alamat }}<br>
-                Telepon: {{ $penjualan->konsumen->telepon }}
+                Phone: {{ $penjualan->konsumen->telepon }}<br>
+                Email: {{ $penjualan->konsumen->email }}
             </address>
         </div>
         <div class="col-sm-4 invoice-col">
-            <b>Faktur #{{ $penjualan->nomor_faktur }}</b><br>
+            <b>Nomor Faktur:</b> {{ $penjualan->nomor_faktur }}<br>
+            <b>Sales:</b> {{ $penjualan->sales->name ?? 'N/A' }}<br>
+            <b>Tanggal Dibuat:</b> {{ $penjualan->created_at->format('d/m/Y H:i') }}
         </div>
     </div>
     <div class="row">
@@ -41,7 +50,7 @@
                         <th>Qty</th>
                         <th>Part</th>
                         <th>Kode Part</th>
-                        <th>Diambil dari Rak</th>
+                        <th>Rak</th>
                         <th>Harga Satuan</th>
                         <th>Subtotal</th>
                     </tr>
@@ -52,9 +61,9 @@
                         <td>{{ $detail->qty_jual }}</td>
                         <td>{{ $detail->part->nama_part }}</td>
                         <td>{{ $detail->part->kode_part }}</td>
-                        <td>{{ $detail->rak->nama_rak }}</td>
-                        <td>Rp {{ number_format($detail->harga_jual, 0, ',', '.') }}</td>
-                        <td>Rp {{ number_format($detail->subtotal, 0, ',', '.') }}</td>
+                        <td>{{ $detail->rak->kode_rak }}</td>
+                        <td>{{ 'Rp ' . number_format($detail->harga_jual, 0, ',', '.') }}</td>
+                        <td>{{ 'Rp ' . number_format($detail->subtotal, 0, ',', '.') }}</td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -62,23 +71,36 @@
         </div>
     </div>
     <div class="row">
-        <div class="col-6"></div>
         <div class="col-6">
-            <p class="lead">Jumlah Tagihan</p>
+            {{-- Bisa diisi dengan metode pembayaran atau catatan lain --}}
+        </div>
+        <div class="col-6">
+            <p class="lead">Detail Pembayaran</p>
             <div class="table-responsive">
                 <table class="table">
                     <tr>
-                        <th style="width:50%">Total:</th>
-                        <td><strong>Rp {{ number_format($penjualan->total_harga, 0, ',', '.') }}</strong></td>
+                        <th style="width:50%">Subtotal:</th>
+                        <td>{{ 'Rp ' . number_format($penjualan->subtotal, 0, ',', '.') }}</td>
+                    </tr>
+                    <tr>
+                        <th>PPN (11%):</th>
+                        <td>{{ 'Rp ' . number_format($penjualan->pajak, 0, ',', '.') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Grand Total:</th>
+                        <td><strong>{{ 'Rp ' . number_format($penjualan->total_harga, 0, ',', '.') }}</strong></td>
                     </tr>
                 </table>
             </div>
         </div>
     </div>
+
     <div class="row no-print">
         <div class="col-12">
-            <a href="#" onclick="window.print();" class="btn btn-default"><i class="fas fa-print"></i> Print</a>
-             <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary float-right">Kembali</a>
+            <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary">Kembali</a>
+            {{-- <button type="button" class="btn btn-primary float-right" style="margin-right: 5px;">
+                <i class="fas fa-download"></i> Generate PDF
+            </button> --}}
         </div>
     </div>
 </div>

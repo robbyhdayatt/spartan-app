@@ -7,94 +7,116 @@
 @stop
 
 @section('content')
-    {{-- Kotak Aksi Approval --}}
-    {{-- DITAMBAHKAN: @can untuk memeriksa hak akses --}}
-    @can('perform-approval', $purchaseOrder)
-        @if($purchaseOrder->status === 'PENDING_APPROVAL')
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Tindakan Persetujuan</h5>
-                <p class="card-text">Purchase Order ini sedang menunggu persetujuan Anda.</p>
-                <form action="{{ route('admin.purchase-orders.approve', $purchaseOrder->id) }}" method="POST" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-success">Approve</button>
-                </form>
-                <form action="{{ route('admin.purchase-orders.reject', $purchaseOrder->id) }}" method="POST" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-danger">Reject</button>
-                </form>
-            </div>
+<div class="invoice p-3 mb-3">
+    <div class="row">
+        <div class="col-12">
+            <h4>
+                <i class="fas fa-globe"></i> SpartanApp
+                <small class="float-right">Tanggal: {{ \Carbon\Carbon::parse($purchaseOrder->tanggal_po)->format('d/m/Y') }}</small>
+            </h4>
         </div>
-        @endif
-    @endcan
-    {{-- AKHIR DARI BLOK @can --}}
-
-
-     @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            {{ session('success') }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+    </div>
+    <div class="row invoice-info">
+        <div class="col-sm-4 invoice-col">
+            Dari
+            <address>
+                {{-- GANTI DENGAN INFO PERUSAHAAN ANDA --}}
+                <strong>PT. Lautan Teduh Interniaga</strong><br>
+                Jl. Ikan Tenggiri, Pesawahan, Kec. Telukbetung Selatan<br>
+                Bandar Lampung, Indonesia<br>
+                Phone: 0812-2000-4367<br>
+                Website: www.yamaha-lampung.com
+            </address>
         </div>
-    @endif
-     @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            {{ session('error') }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <div class="col-sm-4 invoice-col">
+            Kepada
+            <address>
+                <strong>{{ $purchaseOrder->supplier->nama_supplier }}</strong><br>
+                {{ $purchaseOrder->supplier->alamat }}<br>
+                Phone: {{ $purchaseOrder->supplier->telepon }}<br>
+                Email: {{ $purchaseOrder->supplier->email }}
+            </address>
         </div>
-    @endif
-
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Informasi PO</h3>
-            <div class="card-tools">
-                <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary btn-sm">Kembali ke Daftar PO</a>
-            </div>
+        <div class="col-sm-4 invoice-col">
+            <b>Nomor PO:</b> {{ $purchaseOrder->nomor_po }}<br>
+            <b>Tujuan Gudang:</b> {{ $purchaseOrder->gudang->nama_gudang }}<br>
+            <b>Status:</b> <span class="badge {{ $purchaseOrder->status_class }}">{{ $purchaseOrder->status_badge }}</span><br>
+            {{-- PERBAIKAN FINAL DI SINI --}}
+            <b>Dibuat Oleh:</b> {{ $purchaseOrder->createdBy->nama ?? 'Tidak Ditemukan' }}
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <p><strong>Nomor PO:</strong> {{ $purchaseOrder->nomor_po }}</p>
-                    <p><strong>Tanggal:</strong> {{ $purchaseOrder->tanggal_po->format('d F Y') }}</p>
-                    <p><strong>Status:</strong> <span class="badge badge-info">{{ str_replace('_', ' ', $purchaseOrder->status) }}</span></p>
-                    <p><strong>Dibuat oleh:</strong> {{ $purchaseOrder->createdBy->nama }}</p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>Supplier:</strong> {{ $purchaseOrder->supplier->nama_supplier }}</p>
-                    <p><strong>Gudang Tujuan:</strong> {{ $purchaseOrder->gudang->nama_gudang }}</p>
-                    <p><strong>Disetujui oleh:</strong> {{ $purchaseOrder->approvedBy->nama ?? '-' }}</p>
-                    <p><strong>Catatan:</strong> {{ $purchaseOrder->catatan ?? '-' }}</p>
-                </div>
-            </div>
-
-            <h5 class="mt-4">Detail Item</h5>
-            <table class="table table-bordered">
+    </div>
+    <div class="row">
+        <div class="col-12 table-responsive">
+            <table class="table table-striped">
                 <thead>
                     <tr>
+                        <th>Qty</th>
+                        <th>Part</th>
                         <th>Kode Part</th>
-                        <th>Nama Part</th>
-                        <th class="text-right">Qty</th>
-                        <th class="text-right">Harga Beli</th>
-                        <th class="text-right">Subtotal</th>
+                        <th>Harga Satuan</th>
+                        <th>Subtotal</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($purchaseOrder->details as $detail)
                     <tr>
-                        <td>{{ $detail->part->kode_part }}</td>
+                        <td>{{ $detail->qty_pesan }}</td>
                         <td>{{ $detail->part->nama_part }}</td>
-                        <td class="text-right">{{ $detail->qty_pesan }}</td>
-                        <td class="text-right">Rp {{ number_format($detail->harga_beli, 0, ',', '.') }}</td>
-                        <td class="text-right">Rp {{ number_format($detail->subtotal, 0, ',', '.') }}</td>
+                        <td>{{ $detail->part->kode_part }}</td>
+                        <td>{{ 'Rp ' . number_format($detail->harga_beli, 0, ',', '.') }}</td>
+                        <td>{{ 'Rp ' . number_format($detail->subtotal, 0, ',', '.') }}</td>
                     </tr>
                     @endforeach
                 </tbody>
-                <tfoot>
-                    <tr>
-                        <th colspan="4" class="text-right">Total Keseluruhan:</th>
-                        <th class="text-right">Rp {{ number_format($purchaseOrder->total_amount, 0, ',', '.') }}</th>
-                    </tr>
-                </tfoot>
             </table>
         </div>
     </div>
+    <div class="row">
+        <div class="col-6">
+            <p class="lead">Catatan:</p>
+            <p class="text-muted well well-sm shadow-none" style="margin-top: 10px;">
+                {{ $purchaseOrder->catatan ?? 'Tidak ada catatan.' }}
+            </p>
+        </div>
+        <div class="col-6">
+            <p class="lead">Detail Pembayaran</p>
+
+            <div class="table-responsive">
+                <table class="table">
+                    <tr>
+                        <th style="width:50%">Subtotal:</th>
+                        <td>{{ 'Rp ' . number_format($purchaseOrder->subtotal, 0, ',', '.') }}</td>
+                    </tr>
+                    <tr>
+                        <th>PPN (11%):</th>
+                        <td>{{ 'Rp ' . number_format($purchaseOrder->pajak, 0, ',', '.') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Grand Total:</th>
+                        <td><strong>{{ 'Rp ' . number_format($purchaseOrder->total_amount, 0, ',', '.') }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="row no-print">
+        <div class="col-12">
+            @if($purchaseOrder->status === 'PENDING_APPROVAL')
+                 @can('approve-po', $purchaseOrder)
+                <form action="{{ route('admin.purchase-orders.approve', $purchaseOrder) }}" method="POST" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-success float-right"><i class="far fa-credit-card"></i> Setujui</button>
+                </form>
+                <form action="{{ route('admin.purchase-orders.reject', $purchaseOrder) }}" method="POST" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-danger float-right" style="margin-right: 5px;">
+                        <i class="fas fa-times"></i> Tolak
+                    </button>
+                </form>
+                 @endcan
+            @endif
+             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary">Kembali</a>
+        </div>
+    </div>
+</div>
 @stop

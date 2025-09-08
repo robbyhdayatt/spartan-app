@@ -2,99 +2,98 @@
 
 @section('title', 'Laporan Stok per Gudang')
 
-{{-- 1. Aktifkan plugin DataTables --}}
-@section('plugins.Datatables', true)
-
 @section('content_header')
     <h1>Laporan Stok per Gudang</h1>
 @stop
 
 @section('content')
-    {{-- Form Filter --}}
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Pilih Gudang</h3>
-        </div>
-        <div class="card-body">
-            <form action="{{ route('admin.reports.stock-by-warehouse') }}" method="GET">
-                <div class="form-group row">
-                    <label for="gudang_id" class="col-sm-2 col-form-label">Gudang</label>
-                    <div class="col-sm-8">
-                        <select name="gudang_id" id="gudang_id" class="form-control" required>
-                            <option value="" disabled selected>--- Pilih Gudang ---</option>
-                            @foreach($gudangs as $gudang)
+<div class="card">
+    <div class="card-body">
+        <form method="GET" action="{{ route('admin.reports.stock-by-warehouse') }}">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="gudang_id">Pilih Gudang</label>
+                        {{-- **LOGIKA BARU DI TAMPILAN** --}}
+                        {{-- Jika hanya ada 1 gudang (untuk Kepala Gudang), tampilkan sebagai teks biasa --}}
+                        @if(count($gudangs) === 1)
+                            <input type="text" class="form-control" value="{{ $gudangs->first()->nama_gudang }}" readonly>
+                            <input type="hidden" name="gudang_id" value="{{ $gudangs->first()->id }}">
+                        @else
+                        {{-- Jika lebih dari 1, tampilkan sebagai dropdown --}}
+                        <select name="gudang_id" id="gudang_id" class="form-control select2" required>
+                            <option value="">-- Semua Gudang --</option>
+                            @foreach ($gudangs as $gudang)
                                 <option value="{{ $gudang->id }}" {{ request('gudang_id') == $gudang->id ? 'selected' : '' }}>
                                     {{ $gudang->nama_gudang }}
                                 </option>
                             @endforeach
                         </select>
-                    </div>
-                    <div class="col-sm-2">
-                        <button type="submit" class="btn btn-primary">Tampilkan</button>
+                        @endif
                     </div>
                 </div>
-            </form>
-        </div>
-    </div>
-
-    {{-- Tabel Hasil --}}
-    @if(request()->filled('gudang_id'))
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Daftar Stok untuk Gudang: <strong>{{ $gudangs->find(request('gudang_id'))->nama_gudang }}</strong></h3>
-            <div class="card-tools">
-                <a href="{{ route('admin.reports.stock-by-warehouse.export', ['gudang_id' => request('gudang_id')]) }}" class="btn btn-sm btn-success">
-                    <i class="fas fa-file-excel"></i> Export to Excel
-                </a>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary form-control">Tampilkan</button>
+                    </div>
+                </div>
+                {{-- Tombol Export hanya muncul jika ada gudang yang dipilih --}}
+                @if(request('gudang_id'))
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <a href="{{ route('admin.reports.stock-by-warehouse.export', ['gudang_id' => request('gudang_id')]) }}" class="btn btn-success form-control">
+                            <i class="fa fa-file-excel"></i> Export
+                        </a>
+                    </div>
+                </div>
+                @endif
             </div>
-        </div>
-        <div class="card-body">
-            {{-- 2. Beri ID pada tabel --}}
-            <table id="stock-table" class="table table-bordered table-striped">
+        </form>
+
+        @if($inventoryItems->isNotEmpty())
+            <table id="stock-table" class="table table-bordered table-striped mt-4">
                 <thead>
                     <tr>
                         <th>Kode Part</th>
                         <th>Nama Part</th>
-                        <th>Kode Rak</th>
-                        <th>Nama Rak</th>
-                        <th class="text-right">Jumlah Stok</th>
+                        <th>Brand</th>
+                        <th>Kategori</th>
+                        <th>Rak</th>
+                        <th>Qty</th>
+                        <th>Satuan</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($inventoryItems as $item)
-                    <tr>
-                        <td>{{ $item->part->kode_part }}</td>
-                        <td>{{ $item->part->nama_part }}</td>
-                        <td>{{ $item->rak->kode_rak }}</td>
-                        <td>{{ $item->rak->nama_rak }}</td>
-                        <td class="text-right font-weight-bold">{{ $item->quantity }}</td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="5" class="text-center">Tidak ada stok yang tercatat di gudang ini.</td>
-                    </tr>
-                    @endforelse
+                    @foreach ($inventoryItems as $item)
+                        <tr>
+                            <td>{{ $item->part->kode_part }}</td>
+                            <td>{{ $item->part->nama_part }}</td>
+                            <td>{{ $item->part->brand->nama_brand }}</td>
+                            <td>{{ $item->part->category->nama_kategori }}</td>
+                            <td>{{ $item->rak->kode_rak }}</td>
+                            <td>{{ $item->quantity }}</td>
+                            <td>{{ $item->part->satuan }}</td>
+                        </tr>
+                    @endforeach
                 </tbody>
             </table>
-        </div>
+        @elseif(request('gudang_id'))
+            <p class="text-center mt-4">Tidak ada data stok untuk gudang yang dipilih.</p>
+        @endif
     </div>
-    @endif
+</div>
 @stop
-
-@section('plugins.Select2', true)
 
 @section('js')
 <script>
     $(document).ready(function() {
-        // Inisialisasi Select2 untuk filter
-        $('#gudang_id').select2({
-            placeholder: "--- Pilih Gudang ---"
-        });
-
-        // 3. Inisialisasi DataTables
+        $('.select2').select2();
         $('#stock-table').DataTable({
             "responsive": true,
-            "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
+            "lengthChange": false,
+            "autoWidth": false,
         });
     });
 </script>

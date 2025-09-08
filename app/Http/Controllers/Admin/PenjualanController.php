@@ -102,6 +102,7 @@ class PenjualanController extends Controller
             'items.*.rak_id' => 'required|exists:raks,id',
             'items.*.qty' => 'required|integer|min:1',
             'items.*.harga' => 'required|numeric|min:0',
+            'use_ppn' => 'nullable|boolean', // Tambahkan validasi
         ]);
 
         $user = Auth::user();
@@ -116,15 +117,28 @@ class PenjualanController extends Controller
 
         DB::beginTransaction();
         try {
+            $subtotal = 0;
+            foreach ($validated['items'] as $item) {
+                $subtotal += $item['qty'] * $item['harga'];
+            }
+
+            $pajak = 0;
+            if ($request->has('use_ppn') && $request->use_ppn) {
+                $pajak = $subtotal * 0.11;
+            }
+
+            $totalHarga = $subtotal + $pajak;
+
             $penjualan = Penjualan::create([
                 'nomor_faktur' => $this->generateInvoiceNumber(),
                 'tanggal_jual' => $validated['tanggal_jual'],
                 'konsumen_id' => $validated['konsumen_id'],
                 'gudang_id' => $validated['gudang_id'],
-                'sales_id' => $salesId, // Pass the potentially null salesId
+                'sales_id' => $salesId,
+                'subtotal' => $subtotal,
+                'pajak' => $pajak,
+                'total_harga' => $totalHarga,
             ]);
-
-            $totalHarga = 0;
 
             foreach ($validated['items'] as $item) {
                 $inventory = Inventory::where('part_id', $item['part_id'])
@@ -150,19 +164,15 @@ class PenjualanController extends Controller
                     'user_id' => $user->id,
                 ]);
 
-                $subtotal = $item['qty'] * $item['harga'];
+                $itemSubtotal = $item['qty'] * $item['harga'];
                 $penjualan->details()->create([
                     'part_id' => $item['part_id'],
                     'rak_id' => $item['rak_id'],
                     'qty_jual' => $item['qty'],
                     'harga_jual' => $item['harga'],
-                    'subtotal' => $subtotal,
+                    'subtotal' => $itemSubtotal,
                 ]);
-                $totalHarga += $subtotal;
             }
-
-            $penjualan->total_harga = $totalHarga;
-            $penjualan->save();
 
             DB::commit();
             return redirect()->route('admin.penjualans.index')->with('success', 'Transaksi penjualan berhasil disimpan.');

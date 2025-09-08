@@ -49,11 +49,14 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::resource('gudangs', GudangController::class);
     Route::resource('raks', RakController::class);
     Route::resource('suppliers', SupplierController::class);
+
+    // Penambahan route untuk search part
+    Route::get('parts/search', [PartController::class, 'search'])->name('parts.search');
     Route::resource('parts', PartController::class);
     Route::post('parts/import', [PartController::class, 'import'])->name('parts.import');
 
     // === TRANSAKSI GUDANG ===
-    Route::resource('purchase-orders', PurchaseOrderController::class)->except(['edit', 'update']);
+    Route::resource('purchase-orders', PurchaseOrderController::class)->except(['edit', 'update', 'destroy']);
     Route::post('purchase-orders/{purchase_order}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
     Route::post('purchase-orders/{purchase_order}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-orders.reject');
 
@@ -61,6 +64,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('receivings/create', [ReceivingController::class, 'create'])->name('receivings.create');
     Route::post('receivings', [ReceivingController::class, 'store'])->name('receivings.store');
     Route::get('receivings/{receiving}', [ReceivingController::class, 'show'])->name('receivings.show');
+
+    Route::get('api/purchase-orders/{purchaseOrder}', [ReceivingController::class, 'getPoDetails'])->name('api.po.details');
 
     Route::get('quality-control', [QcController::class, 'index'])->name('qc.index');
     Route::get('quality-control/{receiving}/form', [QcController::class, 'showQcForm'])->name('qc.form');
@@ -123,7 +128,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/parts/{part}/stock', [PenjualanController::class, 'getPartStockDetails'])->name('api.part.stock');
     Route::get('api/gudangs/{gudang}/raks', [StockMutationController::class, 'getRaksByGudang'])->name('api.gudang.raks');
-    Route::get('api/purchase-orders/{purchaseOrder}', [ReceivingController::class, 'getPoDetails'])->name('api.po.details');
+    Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/receivings/{receiving}/failed-items', [PurchaseReturnController::class, 'getFailedItems'])->name('api.receivings.failed-items');
     Route::get('api/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('api.penjualans.returnable-items');
 });

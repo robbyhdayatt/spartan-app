@@ -354,7 +354,7 @@ return [
             'text' => 'Purchase Order (PO)',
             'route'  => 'admin.purchase-orders.index',
             'icon' => 'fas fa-fw fa-shopping-cart',
-            'can' => 'create-po'
+            'can' => 'view-purchase-orders'
         ],
         [
             'text' => 'Penerimaan Barang',

@@ -27,11 +27,8 @@ class ReceivingController extends Controller
     // API endpoint to fetch PO details for the form
     public function getPoDetails(PurchaseOrder $purchaseOrder)
     {
-        // Load details where ordered qty is greater than received qty
-        $purchaseOrder->load(['details' => function ($query) {
-            $query->where(DB::raw('qty_pesan - qty_diterima'), '>', 0);
-        }, 'details.part']);
-
+        // Eager load relasi yang dibutuhkan (details dan part di dalamnya)
+        $purchaseOrder->load('details.part');
         return response()->json($purchaseOrder);
     }
 

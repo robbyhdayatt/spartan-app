@@ -54,7 +54,6 @@ class PurchaseOrderController extends Controller
     public function store(Request $request)
     {
         $this->authorize('create-po');
-        // Basic validation for header and at least one item
         $request->validate([
             'tanggal_po' => 'required|date',
             'supplier_id' => 'required|exists:suppliers,id',
@@ -64,65 +63,65 @@ class PurchaseOrderController extends Controller
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.qty' => 'required|integer|min:1',
             'items.*.harga' => 'required|numeric|min:0',
+            'use_ppn' => 'nullable|boolean', // Tambahkan validasi untuk checkbox PPN
         ]);
 
-        // Use a database transaction to ensure data integrity
         DB::beginTransaction();
         try {
-            // Create the PO Header
+            $subtotal = 0;
+            foreach ($request->items as $item) {
+                $subtotal += $item['qty'] * $item['harga'];
+            }
+
+            $pajak = 0;
+            if ($request->has('use_ppn') && $request->use_ppn) {
+                $pajak = $subtotal * 0.11;
+            }
+
+            $totalAmount = $subtotal + $pajak;
+
             $po = PurchaseOrder::create([
                 'nomor_po' => $this->generatePoNumber(),
                 'tanggal_po' => $request->tanggal_po,
                 'supplier_id' => $request->supplier_id,
                 'gudang_id' => $request->gudang_id,
                 'catatan' => $request->catatan,
-                'status' => 'PENDING_APPROVAL', // Status awal
+                'status' => 'PENDING_APPROVAL',
                 'created_by' => Auth::id(),
+                'subtotal' => $subtotal,
+                'pajak' => $pajak,
+                'total_amount' => $totalAmount,
             ]);
 
-            $totalAmount = 0;
-
-            // Create PO Details
             foreach ($request->items as $item) {
-                $subtotal = $item['qty'] * $item['harga'];
+                $itemSubtotal = $item['qty'] * $item['harga'];
                 $po->details()->create([
                     'part_id' => $item['part_id'],
                     'qty_pesan' => $item['qty'],
                     'harga_beli' => $item['harga'],
-                    'subtotal' => $subtotal,
+                    'subtotal' => $itemSubtotal,
                 ]);
-                $totalAmount += $subtotal;
             }
 
-            // Update total amount in the PO header
-            $po->total_amount = $totalAmount;
-            $po->save();
-
-            DB::commit(); // If all good, save the records
+            DB::commit();
             return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dibuat.');
 
         } catch (\Exception $e) {
-            DB::rollBack(); // If any error, rollback
+            DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan saat membuat PO: ' . $e->getMessage())->withInput();
         }
     }
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        // Eager load all relationships for the detail view
-        $purchaseOrder->load(['supplier', 'gudang', 'createdBy', 'details.part']);
-        return view('admin.purchase_orders.show', compact('purchaseOrder'));
-    }
+        // Muat semua relasi seperti biasa
+        $purchaseOrder->load(['supplier', 'gudang', 'details.part']);
 
-    public function destroy(PurchaseOrder $purchaseOrder)
-    {
-        // Logic to prevent deletion of approved POs
-        if ($purchaseOrder->status != 'DRAFT' && $purchaseOrder->status != 'PENDING_APPROVAL') {
-            return back()->with('error', 'Hanya PO dengan status Draft atau Pending Approval yang bisa dihapus.');
-        }
+        // Ambil nama pengguna secara manual di sini
+        $creatorName = \App\Models\User::find($purchaseOrder->created_by)->name ?? 'User Tidak Dikenal';
 
-        $purchaseOrder->delete();
-        return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dihapus.');
+        // Hapus dd() yang sebelumnya dan kirim variabel baru ke view
+        return view('admin.purchase_orders.show', compact('purchaseOrder', 'creatorName'));
     }
 
     // Helper function to generate a unique PO number

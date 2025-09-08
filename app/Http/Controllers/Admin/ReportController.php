@@ -16,6 +16,7 @@ use App\Exports\PurchaseJournalExport;
 use App\Models\ReceivingDetail;
 use App\Exports\InventoryValueExport;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 
 class ReportController extends Controller
@@ -40,15 +41,27 @@ class ReportController extends Controller
 
     public function stockByWarehouse(Request $request)
     {
-        $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+        $user = Auth::user();
         $inventoryItems = collect();
+        $selectedGudangId = $request->input('gudang_id');
 
-        if ($request->filled('gudang_id')) {
-            $inventoryItems = Inventory::where('gudang_id', $request->gudang_id)
-                ->with(['part', 'rak']) // Eager load relasi part dan rak
-                ->where('quantity', '>', 0) // Hanya tampilkan yang ada stok
+        // **LOGIKA BARU BERDASARKAN PERAN PENGGUNA**
+        if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
+            // Jika Kepala Gudang, paksa ID gudang sesuai dengan yang ditugaskan
+            $gudangs = Gudang::where('id', $user->gudang_id)->get();
+            $selectedGudangId = $user->gudang_id; // Otomatis pilih gudangnya
+        } else {
+            // Jika Super Admin atau Manajer Area, bisa pilih semua gudang
+            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+        }
+
+        // Jika ada gudang yang dipilih (baik dari form atau otomatis), cari datanya
+        if ($selectedGudangId) {
+            $inventoryItems = Inventory::where('gudang_id', $selectedGudangId)
+                ->with(['part', 'rak'])
+                ->where('quantity', '>', 0)
                 ->get()
-                ->sortBy('part.nama_part'); // Urutkan berdasarkan nama part
+                ->sortBy('part.nama_part');
         }
 
         return view('admin.reports.stock_by_warehouse', compact('gudangs', 'inventoryItems'));

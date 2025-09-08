@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class PurchaseOrder extends Model
 {
@@ -33,5 +34,27 @@ class PurchaseOrder extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+    // FUNGSI UNTUK TAMPILAN STATUS (WARNA BADGE)
+    public function getStatusClassAttribute()
+    {
+        switch ($this->status) {
+            case 'PENDING_APPROVAL':
+                return 'badge-warning';
+            case 'APPROVED':
+                return 'badge-success';
+            case 'REJECTED':
+                return 'badge-danger';
+            case 'COMPLETED':
+                return 'badge-primary';
+            default:
+                return 'badge-secondary';
+        }
+    }
+
+    // FUNGSI UNTUK TAMPILAN STATUS (TEKS)
+    public function getStatusBadgeAttribute()
+    {
+        return str_replace('_', ' ', $this->status);
     }
 }
