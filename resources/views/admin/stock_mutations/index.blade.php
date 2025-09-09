@@ -40,19 +40,11 @@
                     <td>{{ $mutation->gudangAsal->nama_gudang }} -> {{ $mutation->gudangTujuan->nama_gudang }}</td>
                     <td>{{ $mutation->jumlah }}</td>
                     <td>{{ $mutation->status }}</td>
-                    <td>
-                        @if($mutation->status === 'PENDING_APPROVAL')
-                            <form action="{{ route('admin.stock-mutations.approve', $mutation->id) }}" method="POST" class="d-inline">
-                                @csrf
-                                <button type="submit" class="btn btn-success btn-xs">Approve</button>
-                            </form>
-                            <form action="{{ route('admin.stock-mutations.reject', $mutation->id) }}" method="POST" class="d-inline">
-                                @csrf
-                                <button type="submit" class="btn btn-danger btn-xs">Reject</button>
-                            </form>
-                        @else
-                           -
-                        @endif
+                        <td>
+                            <a href="{{ route('admin.stock-mutations.show', $mutation) }}" class="btn btn-info btn-sm">
+                                Detail
+                            </a>
+                        </td>
                     </td>
                 </tr>
                 @empty

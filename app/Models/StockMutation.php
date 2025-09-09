@@ -9,8 +9,27 @@ class StockMutation extends Model
 {
     use HasFactory;
 
-    protected $guarded = ['id'];
+    protected $guarded = [];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'approved_at' => 'datetime',
+    ];
+
+    // Method untuk generate nomor mutasi (jika belum ada)
+    public static function generateMutationNumber()
+    {
+        $prefix = 'MUT/' . now()->format('Ymd') . '/';
+        $lastMutation = self::where('nomor_mutasi', 'like', $prefix . '%')->orderBy('id', 'desc')->first();
+        $number = $lastMutation ? ((int)substr($lastMutation->nomor_mutasi, -4)) + 1 : 1;
+        return $prefix . str_pad($number, 4, '0', STR_PAD_LEFT);
+    }
+
+    // Relationships
     public function part()
     {
         return $this->belongsTo(Part::class);

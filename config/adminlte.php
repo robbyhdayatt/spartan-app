@@ -387,6 +387,12 @@ return [
             'can' => 'can-manage-stock'
         ],
         [
+            'text' => 'Stok Karantina',
+            'route'  => 'admin.quarantine-stock.index',
+            'icon' => 'fas fa-fw fa-shield-virus',
+            'can' => 'can-process-quarantine', // Menggunakan permission yang sama dengan adjusment & mutasi
+        ],
+        [
             'text' => 'Retur Pembelian',
             'route'  => 'admin.purchase-returns.index',
             'icon' => 'fas fa-fw fa-undo',

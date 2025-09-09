@@ -23,20 +23,35 @@ class StockMutationController extends Controller
 
     public function create()
     {
-        $user = auth()->user();
-        $parts = \App\Models\Part::where('is_active', true)->get();
+        $user = Auth::user();
+        $gudangsTujuan = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
 
-        // Cek peran pengguna untuk menentukan pilihan gudang asal
-        if ($user->gudang_id) {
-            $gudangsAsal = \App\Models\Gudang::where('id', $user->gudang_id)->get();
+        $allowedRoles = ['Super Admin', 'Manajer Area'];
+
+        if (in_array($user->jabatan->nama_jabatan, $allowedRoles)) {
+            $gudangsAsal = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         } else {
-            $gudangsAsal = \App\Models\Gudang::where('is_active', true)->get();
+            $gudangsAsal = Gudang::where('id', $user->gudang_id)->get();
         }
 
-        // Gudang tujuan bisa semua gudang lain yang aktif
-        $gudangsTujuan = \App\Models\Gudang::where('is_active', true)->get();
+        // Kita tidak lagi mengirimkan $parts dari sini
+        return view('admin.stock_mutations.create', compact('gudangsAsal', 'gudangsTujuan'));
+    }
 
-        return view('admin.stock_mutations.create', compact('gudangsAsal', 'gudangsTujuan', 'parts'));
+    // TAMBAHKAN METHOD BARU INI UNTUK AJAX
+    /**
+     * API to get parts that have stock in a specific warehouse.
+     */
+    public function getPartsWithStock(Gudang $gudang)
+    {
+        $partIds = Inventory::where('gudang_id', $gudang->id)
+            ->where('quantity', '>', 0)
+            ->pluck('part_id')
+            ->unique();
+
+        $parts = Part::whereIn('id', $partIds)->orderBy('nama_part')->get();
+
+        return response()->json($parts);
     }
 
     // API endpoint for dynamic dropdown
@@ -181,5 +196,13 @@ class StockMutationController extends Controller
         $latest = StockMutation::whereDate('created_at', today())->count();
         $sequence = str_pad($latest + 1, 4, '0', STR_PAD_LEFT);
         return "MT-{$date}-{$sequence}";
+    }
+
+    public function show(StockMutation $stockMutation)
+    {
+        // Memuat semua relasi yang dibutuhkan untuk ditampilkan di view
+        $stockMutation->load(['part', 'gudangAsal', 'gudangTujuan', 'rakAsal', 'createdBy', 'approvedBy']);
+
+        return view('admin.stock_mutations.show', compact('stockMutation'));
     }
 }

@@ -122,6 +122,11 @@ class AuthServiceProvider extends ServiceProvider
             return in_array($user->jabatan->nama_jabatan, ['Manajer Area']);
         });
 
+        Gate::define('can-process-quarantine', function ($user) {
+            $allowedRoles = ['PJ Gudang', 'Staff Stock Control'];
+            return in_array($user->jabatan->nama_jabatan, $allowedRoles);
+        });
+
     }
 
 }

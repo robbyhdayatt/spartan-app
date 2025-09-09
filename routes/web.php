@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\SalesReturnController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\IncentiveController;
 use App\Http\Controllers\HomeController; // Import HomeController
+use App\Http\Controllers\Admin\QuarantineStockController;
 
 /*
 |--------------------------------------------------------------------------
@@ -85,8 +86,13 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('stock-mutations', [StockMutationController::class, 'index'])->name('stock-mutations.index');
     Route::get('stock-mutations/create', [StockMutationController::class, 'create'])->name('stock-mutations.create');
     Route::post('stock-mutations', [StockMutationController::class, 'store'])->name('stock-mutations.store');
+
+    // TAMBAHKAN ROUTE INI
+    Route::get('stock-mutations/{stockMutation}', [StockMutationController::class, 'show'])->name('stock-mutations.show');
+
     Route::post('stock-mutations/{stockMutation}/approve', [StockMutationController::class, 'approve'])->name('stock-mutations.approve');
     Route::post('stock-mutations/{stockMutation}/reject', [StockMutationController::class, 'reject'])->name('stock-mutations.reject');
+
 
     Route::get('purchase-returns', [PurchaseReturnController::class, 'index'])->name('purchase-returns.index');
     Route::get('purchase-returns/create', [PurchaseReturnController::class, 'create'])->name('purchase-returns.create');
@@ -102,7 +108,11 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('penjualans/create', [PenjualanController::class, 'create'])->name('penjualans.create');
     Route::post('penjualans', [PenjualanController::class, 'store'])->name('penjualans.store');
     Route::get('penjualans/{penjualan}', [PenjualanController::class, 'show'])->name('penjualans.show');
+    Route::get('/penjualans/{id}/details', [\App\Http\Controllers\Admin\PenjualanController::class, 'getDetails'])->name('penjualans.getDetails');
+    Route::get('/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('penjualans.returnable-items');
 
+
+    Route::resource('sales-returns', \App\Http\Controllers\Admin\SalesReturnController::class);
     Route::get('sales-returns', [SalesReturnController::class, 'index'])->name('sales-returns.index');
     Route::get('sales-returns/create', [SalesReturnController::class, 'create'])->name('sales-returns.create');
     Route::post('sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
@@ -125,10 +135,15 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('reports/inventory-value/export', [ReportController::class, 'exportInventoryValue'])->name('reports.inventory-value.export');
     Route::get('reports/sales-purchase-analysis', [ReportController::class, 'salesPurchaseAnalysis'])->name('reports.sales-purchase-analysis');
 
+    // === STOCK QUARANTINE ===
+    Route::get('quarantine-stock', [QuarantineStockController::class, 'index'])->name('quarantine-stock.index');
+    Route::post('quarantine-stock/process', [QuarantineStockController::class, 'process'])->name('quarantine-stock.process');
+
     // === API (untuk AJAX) ===
     Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/parts/{part}/stock', [PenjualanController::class, 'getPartStockDetails'])->name('api.part.stock');
     Route::get('api/gudangs/{gudang}/raks', [StockMutationController::class, 'getRaksByGudang'])->name('api.gudang.raks');
+    Route::get('/api/gudangs/{gudang}/parts-with-stock', [StockMutationController::class, 'getPartsWithStock'])->name('api.gudang.parts-with-stock');
     Route::get('api/receivings/{receiving}/failed-items', [PurchaseReturnController::class, 'getFailedItems'])->name('api.receivings.failed-items');
     Route::get('api/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('api.penjualans.returnable-items');
 });

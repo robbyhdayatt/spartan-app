@@ -249,12 +249,19 @@ $(document).ready(function() {
         if (partId && gudangId) {
             let url = "{{ route('admin.api.part.stock', ['part' => ':partId']) }}";
             url = url.replace(':partId', partId) + `?gudang_id=${gudangId}`;
-            $.getJSON(url, function(data) {
-                 rakSelect.empty().html('<option value="" disabled selected>Pilih Rak (Stok)</option>');
-                 data.forEach(function(stock) {
-                     rakSelect.append(new Option(`${stock.rak.kode_rak} (Stok: ${stock.quantity})`, stock.rak_id));
-                 });
-                 rakSelect.select2({ placeholder: "Pilih Rak (Stok)" });
+            $.getJSON(url, function(response) { // Mengganti nama variabel 'data' menjadi 'response' agar lebih jelas
+                rakSelect.empty().html('<option value="" disabled selected>Pilih Rak (Stok)</option>');
+
+                // PERBAIKAN: Lakukan loop pada response.stock_details
+                if (response.stock_details && response.stock_details.length > 0) {
+                    response.stock_details.forEach(function(stock) {
+                        rakSelect.append(new Option(`${stock.rak.kode_rak} (Stok: ${stock.quantity})`, stock.rak.id)); // Juga perbaiki 'stock.rak_id' menjadi 'stock.rak.id'
+                    });
+                } else {
+                    rakSelect.html('<option value="" disabled selected>Stok tidak ditemukan</option>');
+                }
+
+                rakSelect.select2({ placeholder: "Pilih Rak (Stok)" });
             }).fail(function() {
                 alert('Gagal memuat detail stok rak.');
                 rakSelect.empty().html('<option value="" disabled selected>Error, coba lagi</option>');

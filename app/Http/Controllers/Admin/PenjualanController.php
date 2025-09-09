@@ -79,14 +79,51 @@ class PenjualanController extends Controller
     }
 
     // API: Get stock details (which shelves and how many) for a part
-    public function getPartStockDetails(Part $part, Request $request)
+    public function getPartStockDetails(Part $part)
     {
-        $stockDetails = Inventory::with('rak')
-            ->where('part_id', $part->id)
-            ->where('gudang_id', $request->gudang_id)
-            ->where('quantity', '>', 0)
+        $gudangId = request()->query('gudang_id');
+        if (!$gudangId) {
+            return response()->json(['error' => 'Gudang ID is required.'], 400);
+        }
+
+        // Menggunakan join untuk query yang efisien
+        $stockDetails = Inventory::join('raks', 'inventories.rak_id', '=', 'raks.id')
+            ->where('inventories.part_id', $part->id)
+            ->where('inventories.gudang_id', $gudangId)
+            ->where('inventories.quantity', '>', 0)
+            ->where('raks.tipe_rak', 'PENYIMPANAN')
+            ->select('inventories.*', 'raks.nama_rak', 'raks.kode_rak')
             ->get();
-        return response()->json($stockDetails);
+
+        // Transformasi data agar cocok dengan format JavaScript di view
+        $stockDetails->transform(function ($item) {
+            $item->rak = [
+                'id' => $item->rak_id,
+                'nama_rak' => $item->nama_rak,
+                'kode_rak' => $item->kode_rak,
+            ];
+            return $item;
+        });
+
+        if ($stockDetails->isEmpty()) {
+            return response()->json(['error' => 'Stok siap jual tidak ditemukan di gudang yang dipilih.'], 404);
+        }
+
+        // Menyiapkan data campaign jika ada
+        $activeCampaign = Campaign::where('part_id', $part->id)
+            ->where('tipe', 'PENJUALAN')
+            ->where('is_active', 1)
+            ->where('tanggal_mulai', '<=', now())
+            ->where('tanggal_selesai', '>=', now())
+            ->first();
+
+        $hargaJual = $activeCampaign ? $activeCampaign->harga_promo : $part->harga_jual_default;
+
+        return response()->json([
+            'stock_details' => $stockDetails,
+            'harga_jual' => $hargaJual,
+            'is_promo' => !is_null($activeCampaign)
+        ]);
     }
 
     public function store(Request $request)
@@ -180,5 +217,25 @@ class PenjualanController extends Controller
         $latest = Penjualan::whereDate('created_at', today())->count();
         $sequence = str_pad($latest + 1, 4, '0', STR_PAD_LEFT);
         return "INV/{$date}/{$sequence}";
+    }
+
+    /**
+     * Mengambil detail item dari sebuah penjualan untuk keperluan AJAX.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDetails($id)
+    {
+        // Cari data penjualan beserta relasi ke detail dan part-nya
+        $penjualan = \App\Models\Penjualan::with('details.part')->find($id);
+
+        // Jika tidak ditemukan, kembalikan error 404
+        if (!$penjualan) {
+            return response()->json(['error' => 'Faktur tidak ditemukan'], 404);
+        }
+
+        // Jika berhasil, kembalikan detailnya sebagai JSON
+        return response()->json($penjualan->details);
     }
 }
