@@ -55,15 +55,6 @@
                     <textarea name="catatan" class="form-control" rows="2"></textarea>
                 </div>
 
-                {{-- PPN Checkbox --}}
-                <div class="form-group">
-                    <div class="custom-control custom-switch">
-                        <input type="checkbox" class="custom-control-input" id="use_ppn" name="use_ppn" value="1">
-                        <label class="custom-control-label" for="use_ppn">Gunakan PPN 11%</label>
-                    </div>
-                </div>
-
-
                 {{-- PO Items Table --}}
                 <h5 class="mt-4">Item Sparepart</h5>
                 <hr>
@@ -81,26 +72,42 @@
                         <tbody id="po-items-table">
                             {{-- Items will be added here by JavaScript --}}
                         </tbody>
-                        <tfoot>
-                            <tr>
-                                <th colspan="3" class="text-right">Subtotal</th>
-                                <th id="subtotal">Rp 0</th>
-                                <th></th>
-                            </tr>
-                            <tr id="ppn-row" style="display: none;">
-                                <th colspan="3" class="text-right">PPN (11%)</th>
-                                <th id="ppn">Rp 0</th>
-                                <th></th>
-                            </tr>
-                            <tr>
-                                <th colspan="3" class="text-right">Grand Total</th>
-                                <th id="grand-total">Rp 0</th>
-                                <th></th>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
                 <button type="button" class="btn btn-success btn-sm" id="add-item-btn">+ Tambah Item</button>
+                
+                {{-- Total Kalkulasi dan PPN (Struktur disamakan dengan Penjualan) --}}
+                <div class="row justify-content-end mt-4">
+                    <div class="col-md-5">
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Subtotal</th>
+                                <td class="text-right" id="display-subtotal">Rp 0</td>
+                            </tr>
+                            <tr>
+                                <th>
+                                    <div class="form-check">
+                                        {{-- ID dan name disesuaikan dengan logika JS & controller yang ada --}}
+                                        <input class="form-check-input" type="checkbox" id="ppn-checkbox" name="use_ppn" value="1">
+                                        <label class="form-check-label" for="ppn-checkbox">
+                                            PPN (11%)
+                                        </label>
+                                    </div>
+                                </th>
+                                <td class="text-right" id="display-ppn">Rp 0</td>
+                            </tr>
+                            <tr>
+                                <th style="font-size: 1.2rem;">Grand Total</th>
+                                <td class="text-right font-weight-bold" style="font-size: 1.2rem;" id="display-grand-total">Rp 0</td>
+                            </tr>
+                        </table>
+                        {{-- Hidden inputs to store calculated values --}}
+                        <input type="hidden" name="subtotal" id="input-subtotal" value="0">
+                        <input type="hidden" name="ppn_jumlah" id="input-ppn" value="0">
+                        <input type="hidden" name="total" id="input-grand-total" value="0">
+                    </div>
+                </div>
+
             </div>
             <div class="card-footer">
                 <button type="submit" class="btn btn-primary">Simpan Purchase Order</button>
@@ -136,36 +143,32 @@
 
             let itemIndex = 0;
 
-            // Fungsi untuk format Rupiah
-            function formatRupiah(angka) {
-                return new Intl.NumberFormat('id-ID', {
-                    style: 'currency',
-                    currency: 'IDR',
-                    minimumFractionDigits: 0
-                }).format(angka);
-            }
-
-            // Fungsi untuk menghitung total keseluruhan
+            // Fungsi untuk menghitung total keseluruhan (disesuaikan dengan tampilan baru)
             function calculateGrandTotal() {
-                let subtotal = 0;
+                let subtotalTotal = 0;
                 $('#po-items-table tr').each(function() {
                     const itemSubtotal = parseFloat($(this).find('.item-subtotal').attr('data-value')) || 0;
-                    subtotal += itemSubtotal;
+                    subtotalTotal += itemSubtotal;
                 });
 
-                $('#subtotal').text(formatRupiah(subtotal));
-
-                let pajak = 0;
-                if ($('#use_ppn').is(':checked')) {
-                    $('#ppn-row').show();
-                    pajak = subtotal * 0.11;
-                } else {
-                    $('#ppn-row').hide();
+                let ppnAmount = 0;
+                if ($('#ppn-checkbox').is(':checked')) {
+                    ppnAmount = subtotalTotal * 0.11;
                 }
-                $('#ppn').text(formatRupiah(pajak));
 
-                const grandTotal = subtotal + pajak;
-                $('#grand-total').text(formatRupiah(grandTotal));
+                const grandTotal = subtotalTotal + ppnAmount;
+                
+                const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+                // Update display
+                $('#display-subtotal').text(formatter.format(subtotalTotal));
+                $('#display-ppn').text(formatter.format(ppnAmount));
+                $('#display-grand-total').text(formatter.format(grandTotal));
+
+                // Update hidden inputs for submission
+                $('#input-subtotal').val(subtotalTotal);
+                $('#input-ppn').val(ppnAmount);
+                $('#input-grand-total').val(grandTotal);
             }
 
             // Fungsi untuk menghitung subtotal per baris
@@ -179,7 +182,7 @@
                 calculateGrandTotal();
             }
 
-            // **BARU**: Fungsi untuk menonaktifkan part yang sudah dipilih
+            // Fungsi untuk menonaktifkan part yang sudah dipilih
             function refreshPartOptions() {
                 let selectedParts = [];
                 $('.item-part').each(function() {
@@ -196,23 +199,20 @@
                     currentDropdown.find('option').each(function() {
                         let option = $(this);
                         let optionValue = option.val();
-
-                        // Aktifkan kembali semua opsi kecuali yang kosong
+                        
                         if(optionValue) {
                            option.prop('disabled', false);
                         }
-
-                        // Nonaktifkan jika sudah dipilih di dropdown LAIN
+                        
                         if (selectedParts.includes(optionValue) && optionValue !== currentValue) {
-                            option.prop('disabled', true);
+                           option.prop('disabled', true);
                         }
                     });
                 });
 
-                // Refresh semua Select2 agar perubahan terlihat
                 $('.select2-part').select2({
-                     placeholder: "Pilih Part",
-                     width: '100%'
+                    placeholder: "Pilih Part",
+                    width: '100%'
                 });
             }
 
@@ -228,14 +228,14 @@
                 });
 
                 itemIndex++;
-                refreshPartOptions(); // Panggil fungsi refresh
+                refreshPartOptions();
             });
 
             // Event delegation untuk menghapus baris
             $('#po-items-table').on('click', '.remove-item-btn', function() {
                 $(this).closest('tr').remove();
                 calculateGrandTotal();
-                refreshPartOptions(); // Panggil fungsi refresh
+                refreshPartOptions();
             });
 
             // Event delegation untuk perubahan pada part, qty, atau harga
@@ -246,14 +246,14 @@
                     let selectedPart = row.find('.item-part option:selected');
                     let defaultHarga = selectedPart.data('harga') || 0;
                     row.find('.item-harga').val(defaultHarga);
-                    refreshPartOptions(); // Panggil fungsi refresh saat part diganti
+                    refreshPartOptions();
                 }
 
                 calculateRowSubtotal(row);
             });
 
             // Event listener untuk checkbox PPN
-            $('#use_ppn').on('change', calculateGrandTotal);
+            $('#ppn-checkbox').on('change', calculateGrandTotal);
 
             // Tambahkan baris pertama secara otomatis
             $('#add-item-btn').click();

@@ -3,6 +3,7 @@
 @section('title', 'Manajemen Rak')
 
 @section('plugins.Datatables', true)
+@section('plugins.Select2', true)
 
 @section('content_header')
     <h1>Manajemen Rak</h1>
@@ -28,14 +29,21 @@
                     </ul>
                 </div>
             @endif
+            @if(session('success'))
+                <div class="alert alert-success">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger">{{ session('error') }}</div>
+            @endif
 
-            <table id="raks-table" class="table table-bordered">
+            <table id="raks-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th style="width: 10px">#</th>
                         <th>Gudang</th>
                         <th>Kode Rak</th>
                         <th>Nama Rak</th>
+                        <th>Tipe Rak</th>
                         <th>Status</th>
                         <th style="width: 150px">Aksi</th>
                     </tr>
@@ -47,6 +55,13 @@
                         <td>{{ $rak->gudang->nama_gudang ?? 'N/A' }}</td>
                         <td>{{ $rak->kode_rak }}</td>
                         <td>{{ $rak->nama_rak }}</td>
+                        <td>
+                            @if($rak->tipe_rak == 'KARANTINA')
+                                <span class="badge badge-warning">KARANTINA</span>
+                            @else
+                                <span class="badge badge-info">PENYIMPANAN</span>
+                            @endif
+                        </td>
                         <td>
                             @if($rak->is_active)
                                 <span class="badge badge-success">Aktif</span>
@@ -60,12 +75,13 @@
                                     data-gudang_id="{{ $rak->gudang_id }}"
                                     data-kode_rak="{{ $rak->kode_rak }}"
                                     data-nama_rak="{{ $rak->nama_rak }}"
+                                    data-tipe_rak="{{ $rak->tipe_rak }}"
                                     data-is_active="{{ $rak->is_active }}"
                                     data-toggle="modal"
                                     data-target="#editModal">
                                 Edit
                             </button>
-                            <form action="{{ route('admin.raks.destroy', $rak->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin?');">
+                            <form action="{{ route('admin.raks.destroy', $rak->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus rak ini?');">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-danger btn-xs">Hapus</button>
@@ -78,6 +94,7 @@
         </div>
     </div>
 
+    {{-- Create Modal --}}
     <div class="modal fade" id="createModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
@@ -98,9 +115,16 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Tipe Rak</label>
+                            <select class="form-control" name="tipe_rak" required>
+                                <option value="PENYIMPANAN">Penyimpanan</option>
+                                <option value="KARANTINA">Karantina</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Kode Rak</label>
-                            <input type="text" class="form-control" name="kode_rak" placeholder="Contoh: BDL-A-01-01" required>
-                            <small class="form-text text-muted">Gunakan format: [Kode Gudang]-[Zona]-[Tingkat]-[Posisi]. Contoh: BDL-A-01-01</small>
+                            <input type="text" class="form-control" name="kode_rak" placeholder="Contoh: BDL-A-01 atau BDL-KRN-RT" required>
+                            <small class="form-text text-muted">Kode harus unik per gudang.</small>
                         </div>
                         <div class="form-group">
                             <label>Nama Rak</label>
@@ -116,6 +140,7 @@
         </div>
     </div>
 
+    {{-- Edit Modal --}}
     <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
@@ -135,10 +160,17 @@
                                 @endforeach
                             </select>
                         </div>
+                         <div class="form-group">
+                            <label>Tipe Rak</label>
+                            <select class="form-control" name="tipe_rak" id="edit_tipe_rak" required>
+                                <option value="PENYIMPANAN">Penyimpanan</option>
+                                <option value="KARANTINA">Karantina</option>
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label>Kode Rak</label>
                             <input type="text" class="form-control" id="edit_kode_rak" name="kode_rak" required>
-                            <small class="form-text text-muted">Gunakan format: [Kode Gudang]-[Zona]-[Tingkat]-[Posisi]. Contoh: BDL-A-01-01</small>
+                            <small class="form-text text-muted">Kode harus unik per gudang.</small>
                         </div>
                         <div class="form-group">
                             <label>Nama Rak</label>
@@ -165,9 +197,8 @@
 @section('js')
 <script>
     $(document).ready(function() {
-
+        // Inisialisasi Select2
         $('#createModal .select2').select2({ dropdownParent: $('#createModal') });
-        $('#editModal .select2').select2({ dropdownParent: $('#editModal') });
 
         // Event listener untuk tombol edit
         $('.edit-btn').on('click', function() {
@@ -175,26 +206,30 @@
             var gudang_id = $(this).data('gudang_id');
             var kode_rak = $(this).data('kode_rak');
             var nama_rak = $(this).data('nama_rak');
+            var tipe_rak = $(this).data('tipe_rak');
             var is_active = $(this).data('is_active');
 
-            // Set action URL untuk form edit
+            // Set action URL
             var url = "{{ url('admin/raks') }}/" + id;
             $('#editForm').attr('action', url);
 
-            // Isi nilai-nilai form di dalam modal
+            // Isi nilai-nilai form
             $('#edit_gudang_id').val(gudang_id);
+            $('#edit_tipe_rak').val(tipe_rak);
             $('#edit_kode_rak').val(kode_rak);
             $('#edit_nama_rak').val(nama_rak);
             $('#edit_is_active').val(is_active);
         });
 
+        // Inisialisasi DataTable
         $('#raks-table').DataTable({
             "responsive": true,
+            "autoWidth": false,
         });
 
         // Jika ada error validasi, buka kembali modal yang sesuai
         @if ($errors->any())
-            @if (old('id')) // Asumsi ada input hidden 'id' di form edit jika diperlukan
+            @if (old('id')) // Ini perlu disesuaikan jika Anda ingin menangani error edit
                 $('#editModal').modal('show');
             @else
                 $('#createModal').modal('show');

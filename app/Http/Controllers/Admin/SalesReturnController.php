@@ -90,10 +90,18 @@ class SalesReturnController extends Controller
                 // Update kuantitas yang sudah diretur di detail penjualan
                 $penjualanDetail->increment('qty_diretur', $qtyRetur);
 
-                // Tambahkan stok kembali ke rak karantina
-                $rakKarantina = Rak::where('gudang_id', $penjualan->gudang_id)
-                                    ->where('tipe_rak', 'KARANTINA_RETUR')
-                                    ->firstOrFail();
+                // **PERBAIKAN: Gunakan firstOrCreate untuk membuat rak karantina jika belum ada**
+                $rakKarantina = Rak::firstOrCreate(
+                    [
+                        'gudang_id' => $penjualan->gudang_id,
+                        'kode_rak'  => 'KARANTINA-RETUR-JUAL' // Kunci unik untuk pencarian
+                    ],
+                    [
+                        'nama_rak'  => 'Karantina Retur Penjualan', // Data ini hanya dipakai jika membuat baru
+                        'tipe_rak'  => 'KARANTINA_RETUR',
+                        'is_active' => 1
+                    ]
+                );
 
                 $inventory = Inventory::firstOrCreate(
                     ['part_id' => $penjualanDetail->part_id, 'rak_id' => $rakKarantina->id],
@@ -103,17 +111,19 @@ class SalesReturnController extends Controller
             }
 
             // === KALKULASI PAJAK DAN TOTAL AKHIR ===
+            $taxRate = 0;
+            // Cek apakah faktur penjualan asli punya subtotal dan pajak
+            if ($penjualan->subtotal > 0 && $penjualan->pajak > 0) {
+                 // Gunakan kolom 'pajak' yang benar dari tabel penjualan, bukan 'ppn_jumlah'
+                $taxRate = $penjualan->pajak / $penjualan->subtotal;
+            }
 
-            // 1. Tentukan tarif pajak dari faktur asli
-            $taxRate = ($penjualan->subtotal > 0) ? ($penjualan->pajak / $penjualan->subtotal) : 0;
-
-            // 2. Hitung nilai pajak untuk retur ini
             $pajakRetur = $subtotalRetur * $taxRate;
-
-            // 3. Hitung total retur (subtotal + pajak)
             $totalRetur = $subtotalRetur + $pajakRetur;
 
-            // 4. Update total retur di dokumen induk
+            // Update total dan subtotal di dokumen retur
+            $salesReturn->subtotal = $subtotalRetur;
+            $salesReturn->pajak = $pajakRetur;
             $salesReturn->total_retur = $totalRetur;
             $salesReturn->save();
 
@@ -134,6 +144,7 @@ class SalesReturnController extends Controller
         return view('admin.sales_returns.show', compact('salesReturn'));
     }
 
+    // Fungsi ini sudah tidak digunakan karena generate nomor ada di Model, tapi kita biarkan saja.
     private function generateReturnNumber()
     {
         $date = now()->format('Ymd');
@@ -150,13 +161,11 @@ class SalesReturnController extends Controller
      */
     public function getReturnableItems(Penjualan $penjualan)
     {
-        // Memuat relasi details beserta part untuk setiap detail
         $penjualan->load('details.part');
-
-        // Mengambil hanya item yang masih memiliki kuantitas yang bisa diretur
+        
         $returnableItems = $penjualan->details->filter(function ($detail) {
             return $detail->qty_jual > $detail->qty_diretur;
-        })->values(); // `values()` untuk mereset key array setelah filter
+        })->values();
 
         return response()->json($returnableItems);
     }

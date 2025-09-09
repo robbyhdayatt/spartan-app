@@ -26,7 +26,7 @@ class RakController extends Controller
         $validated = $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
             'nama_rak' => 'required|string|max:100',
-            // Pastikan kode rak unik untuk setiap gudang
+            'tipe_rak' => 'required|in:PENYIMPANAN,KARANTINA', // Validasi baru
             'kode_rak' => [
                 'required',
                 'string',
@@ -48,6 +48,7 @@ class RakController extends Controller
         $validated = $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
             'nama_rak' => 'required|string|max:100',
+            'tipe_rak' => 'required|in:PENYIMPANAN,KARANTINA', // Validasi baru
             'kode_rak' => [
                 'required',
                 'string',
@@ -67,6 +68,12 @@ class RakController extends Controller
     public function destroy(Rak $rak)
     {
         $this->authorize('is-super-admin');
+
+        // Tambahkan validasi: jangan hapus rak jika masih ada stok
+        if ($rak->inventories()->where('quantity', '>', 0)->exists()) {
+            return redirect()->route('admin.raks.index')->with('error', 'Rak tidak dapat dihapus karena masih ada stok di dalamnya.');
+        }
+
         $rak->delete();
         return redirect()->route('admin.raks.index')->with('success', 'Rak berhasil dihapus!');
     }

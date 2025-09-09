@@ -12,7 +12,12 @@ class QcRakSeeder extends Seeder
         foreach ($gudangs as $gudang) {
             Rak::firstOrCreate(
                 ['kode_rak' => $gudang->kode_gudang . '-KRN-QC'],
-                ['gudang_id' => $gudang->id, 'nama_rak' => 'Rak Karantina QC', 'is_active' => true]
+                [
+                    'gudang_id' => $gudang->id,
+                    'nama_rak' => 'Rak Karantina QC',
+                    'tipe_rak' => 'KARANTINA', // <-- TAMBAHKAN BARIS INI
+                    'is_active' => true
+                ]
             );
         }
     }

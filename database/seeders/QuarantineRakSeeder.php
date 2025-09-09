@@ -15,6 +15,7 @@ class QuarantineRakSeeder extends Seeder
                 [
                     'gudang_id' => $gudang->id,
                     'nama_rak' => 'Rak Karantina Retur',
+                    'tipe_rak' => 'KARANTINA', // <-- TAMBAHKAN BARIS INI
                     'is_active' => true
                 ]
             );
