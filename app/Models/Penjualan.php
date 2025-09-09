@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Penjualan extends Model
 {
@@ -35,5 +36,31 @@ class Penjualan extends Model
     public function sales()
     {
         return $this->belongsTo(User::class, 'sales_id');
+    }
+
+    public static function generateNomorFaktur() // Nama fungsi diubah
+    {
+        $prefix = 'INV/' . date('Ym') . '/';
+
+        // PERBAIKAN: Menggunakan kolom 'nomor_faktur'
+        $lastSale = DB::table('penjualans')
+                      ->where('nomor_faktur', 'like', $prefix . '%')
+                      ->orderBy('nomor_faktur', 'desc')
+                      ->first();
+
+        if ($lastSale) {
+            // PERBAIKAN: Mengambil dari kolom 'nomor_faktur'
+            $lastNumber = (int) substr($lastSale->nomor_faktur, -4);
+            $newNumber = $lastNumber + 1;
+        } else {
+            $newNumber = 1;
+        }
+
+        return $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function stockMovements()
+    {
+        return $this->morphMany(StockMovement::class, 'referensi');
     }
 }

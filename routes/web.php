@@ -129,7 +129,6 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/parts/{part}/stock', [PenjualanController::class, 'getPartStockDetails'])->name('api.part.stock');
     Route::get('api/gudangs/{gudang}/raks', [StockMutationController::class, 'getRaksByGudang'])->name('api.gudang.raks');
-    Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/receivings/{receiving}/failed-items', [PurchaseReturnController::class, 'getFailedItems'])->name('api.receivings.failed-items');
     Route::get('api/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('api.penjualans.returnable-items');
 });

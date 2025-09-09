@@ -20,11 +20,13 @@
         <div class="col-sm-4 invoice-col">
             Dari
             <address>
-                <strong>SpartanApp, Inc.</strong><br>
-                Gudang: {{ $penjualan->gudang->nama_gudang }}<br>
-                Alamat Gudang: {{ $penjualan->gudang->alamat_gudang }}<br>
-                Phone: (xxx) xxx-xxxx<br>
-                Email: info@spartan.com
+            <address>
+                {{-- GANTI DENGAN INFO PERUSAHAAN ANDA --}}
+                <strong>PT. Lautan Teduh Interniaga</strong><br>
+                Jl. Ikan Tenggiri, Pesawahan, Kec. Telukbetung Selatan<br>
+                Bandar Lampung, Indonesia<br>
+                Phone: 0812-2000-4367<br>
+                Website: www.yamaha-lampung.com
             </address>
         </div>
         <div class="col-sm-4 invoice-col">
@@ -39,7 +41,7 @@
         <div class="col-sm-4 invoice-col">
             <b>Nomor Faktur:</b> {{ $penjualan->nomor_faktur }}<br>
             <b>Sales:</b> {{ $penjualan->sales->name ?? 'N/A' }}<br>
-            <b>Tanggal Dibuat:</b> {{ $penjualan->created_at->format('d/m/Y H:i') }}
+            <b>Tanggal Dibuat:</b> {{ $penjualan->created_at->format('d/m/Y') }}
         </div>
     </div>
     <div class="row">

@@ -91,95 +91,80 @@ class PenjualanController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorize('create-penjualan');
-        $validated = $request->validate([
-            'tanggal_jual' => 'required|date',
-            'konsumen_id' => 'required|exists:konsumens,id',
+        $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
-            'sales_id' => 'nullable|exists:users,id',
+            'konsumen_id' => 'required|exists:konsumens,id',
+            'tanggal_jual' => 'required|date',
             'items' => 'required|array|min:1',
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.rak_id' => 'required|exists:raks,id',
             'items.*.qty' => 'required|integer|min:1',
             'items.*.harga' => 'required|numeric|min:0',
-            'use_ppn' => 'nullable|boolean', // Tambahkan validasi
         ]);
-
-        $user = Auth::user();
-        $salesId = null; // Default to null
-
-        // Assign sales ID based on user role
-        if ($user->jabatan->nama_jabatan === 'Sales') {
-            $salesId = $user->id;
-        } elseif (!empty($validated['sales_id'])) {
-            $salesId = $validated['sales_id'];
-        }
 
         DB::beginTransaction();
         try {
-            $subtotal = 0;
-            foreach ($validated['items'] as $item) {
-                $subtotal += $item['qty'] * $item['harga'];
-            }
-
-            $pajak = 0;
-            if ($request->has('use_ppn') && $request->use_ppn) {
-                $pajak = $subtotal * 0.11;
-            }
-
-            $totalHarga = $subtotal + $pajak;
-
             $penjualan = Penjualan::create([
-                'nomor_faktur' => $this->generateInvoiceNumber(),
-                'tanggal_jual' => $validated['tanggal_jual'],
-                'konsumen_id' => $validated['konsumen_id'],
-                'gudang_id' => $validated['gudang_id'],
-                'sales_id' => $salesId,
-                'subtotal' => $subtotal,
-                'pajak' => $pajak,
-                'total_harga' => $totalHarga,
+                'nomor_faktur' => Penjualan::generateNomorFaktur(),
+                'tanggal_jual' => $request->tanggal_jual,
+                'gudang_id' => $request->gudang_id,
+                'konsumen_id' => $request->konsumen_id,
+                'sales_id' => $request->sales_id ?? auth()->id(),
+                'status' => 'COMPLETED',
+                'created_by' => auth()->id(),
+                'subtotal' => $request->subtotal,
+                'kena_ppn' => $request->has('kena_ppn'),
+                'pajak' => $request->ppn_jumlah, // PERBAIKAN 1: Menggunakan kolom 'pajak'
+                'total_harga' => $request->total_harga,
             ]);
 
-            foreach ($validated['items'] as $item) {
-                $inventory = Inventory::where('part_id', $item['part_id'])
-                    ->where('rak_id', $item['rak_id'])->first();
+            foreach ($request->items as $item) {
+                $rakId = $item['rak_id'];
+                $partId = $item['part_id'];
+                $qty = (int)$item['qty'];
+                $harga = $item['harga'];
 
-                if (!$inventory || $inventory->quantity < $item['qty']) {
-                    throw new \Exception('Stok tidak mencukupi untuk part di rak yang dipilih.');
+                // Kurangi stok dari inventory
+                $inventory = Inventory::where('rak_id', $rakId)
+                    ->where('part_id', $partId)
+                    ->first();
+
+                if (!$inventory || $inventory->quantity < $qty) {
+                    $part = Part::find($partId);
+                    throw new \Exception("Stok tidak mencukupi untuk part '{$part->nama_part}' di rak yang dipilih.");
                 }
 
-                $inventory->quantity -= $item['qty'];
-                $inventory->save();
+                $stokSebelum = $inventory->quantity;
+                $inventory->decrement('quantity', $qty);
 
-                $stokSebelum = $inventory->quantity + $item['qty'];
-
-                \App\Models\StockMovement::create([
-                    'part_id' => $item['part_id'],
-                    'gudang_id' => $validated['gudang_id'],
-                    'tipe_gerakan' => 'PENJUALAN',
-                    'jumlah' => -$item['qty'],
-                    'stok_sebelum' => $stokSebelum,
-                    'stok_sesudah' => $inventory->quantity,
-                    'referensi' => $penjualan->nomor_faktur,
-                    'user_id' => $user->id,
+                // Buat detail penjualan
+                $penjualan->details()->create([
+                    'part_id' => $partId,
+                    'rak_id' => $rakId,
+                    'qty_jual' => $qty,         // PERBAIKAN 2: Menggunakan kolom 'qty_jual'
+                    'harga_jual' => $harga,   // PERBAIKAN 2: Menggunakan kolom 'harga_jual'
+                    'subtotal' => $qty * $harga,
                 ]);
 
-                $itemSubtotal = $item['qty'] * $item['harga'];
-                $penjualan->details()->create([
-                    'part_id' => $item['part_id'],
-                    'rak_id' => $item['rak_id'],
-                    'qty_jual' => $item['qty'],
-                    'harga_jual' => $item['harga'],
-                    'subtotal' => $itemSubtotal,
+                // Catat pergerakan stok
+                $penjualan->stockMovements()->create([
+                    'part_id' => $partId,
+                    'gudang_id' => $penjualan->gudang_id,
+                    'rak_id' => $rakId,
+                    'jumlah' => -$qty, // PERBAIKAN 3: Menggunakan kolom 'jumlah'
+                    'stok_sebelum' => $stokSebelum,
+                    'stok_sesudah' => $inventory->quantity,
+                    'user_id' => auth()->id(),
+                    'keterangan' => 'Penjualan via Faktur #' . $penjualan->nomor_faktur,
                 ]);
             }
 
             DB::commit();
-            return redirect()->route('admin.penjualans.index')->with('success', 'Transaksi penjualan berhasil disimpan.');
+            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan berhasil disimpan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Terjadi kesalahan saat menyimpan: ' . $e->getMessage())->withInput();
         }
     }
 
