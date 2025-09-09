@@ -13,12 +13,14 @@
         <div class="card-header">
             <h3 class="card-title">Daftar Part</h3>
             <div class="card-tools">
+                @if(Auth::user()->jabatan->nama_jabatan == 'Super Admin' || Auth::user()->jabatan->nama_jabatan == 'Manajer Area')
                 <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#importModal">
                     <i class="fas fa-file-excel"></i> Import Excel
                 </button>
                 <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#createModal">
                     Tambah Part
                 </button>
+                @endif
             </div>
         </div>
         <div class="card-body">
@@ -39,7 +41,10 @@
             <table id="parts-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
-                        <th>Kode Part</th><th>Nama Part</th><th>Brand</th><th>Kategori</th><th>Harga Jual</th><th>Status</th><th style="width: 150px">Aksi</th>
+                        <th>Kode Part</th><th>Nama Part</th><th>Brand</th><th>Kategori</th><th>Harga Jual</th><th>Status</th>
+                        @if(Auth::user()->jabatan->nama_jabatan == 'Super Admin' || Auth::user()->jabatan->nama_jabatan == 'Manajer Area')
+                        <th style="width: 150px">Aksi</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -57,6 +62,7 @@
                                 <span class="badge badge-danger">Non-Aktif</span>
                             @endif
                         </td>
+                        @if(Auth::user()->jabatan->nama_jabatan == 'Super Admin' || Auth::user()->jabatan->nama_jabatan == 'Manajer Area')
                         <td>
                             <a href="{{ route('admin.reports.stock-card', ['part_id' => $part->id]) }}" class="btn btn-info btn-xs">Kartu Stok</a>
                             <button class="btn btn-warning btn-xs edit-btn" data-id="{{ $part->id }}" data-part='@json($part)' data-toggle="modal" data-target="#editModal">Edit</button>
@@ -66,6 +72,7 @@
                                 <button type="submit" class="btn btn-danger btn-xs">Hapus</button>
                             </form>
                         </td>
+                        @endif
                     </tr>
                     @endforeach
                 </tbody>

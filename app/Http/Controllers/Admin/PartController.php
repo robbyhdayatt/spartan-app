@@ -11,9 +11,29 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\PartsImport;
 use Maatwebsite\Excel\Validators\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class PartController extends Controller
 {
+    public function __construct()
+    {
+        // Izinkan semua user yang login untuk melihat daftar part (index)
+        $this->middleware('auth');
+
+        // Batasi akses untuk metode lainnya hanya untuk peran tertentu
+        $this->middleware(function ($request, $next) {
+            $userRole = Auth::user()->jabatan->nama_jabatan;
+            if ($userRole !== 'Super Admin' && $userRole !== 'Manajer Area') {
+                // Jika mencoba mengakses selain method 'index' atau 'show', tolak aksesnya
+                // (Asumsi 'show' juga read-only)
+                if (!$request->isMethod('get')) {
+                     abort(403, 'ANDA TIDAK MEMILIKI HAK AKSES.');
+                }
+            }
+            return $next($request);
+        })->except(['index', 'show']); // Terapkan middleware ini ke semua method KECUALI index dan show
+    }
+
     public function index()
     {
         $parts = Part::with(['brand', 'category'])->latest()->get();

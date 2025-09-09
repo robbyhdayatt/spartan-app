@@ -19,8 +19,14 @@ class ReceivingController extends Controller
 
     public function create()
     {
+        $user = Auth::user();
+        // PERBAIKAN: Gunakan whereIn untuk mengambil PO yang masih relevan
         $purchaseOrders = PurchaseOrder::whereIn('status', ['APPROVED', 'PARTIALLY_RECEIVED'])
-            ->orderBy('nomor_po')->get();
+            ->where('gudang_id', $user->gudang_id)
+            ->with('supplier')
+            ->orderBy('tanggal_po', 'desc') // Tambahan: urutkan agar yg terbaru di atas
+            ->get();
+
         return view('admin.receivings.create', compact('purchaseOrders'));
     }
 
@@ -101,8 +107,12 @@ class ReceivingController extends Controller
 
     public function show(Receiving $receiving)
     {
-        $receiving->load(['purchaseOrder.supplier', 'gudang', 'receivedBy', 'details.part']);
-        return view('admin.receivings.show', compact('receiving'));
+        // Tambahkan 'createdBy' ke dalam list load
+        $receiving->load('purchaseOrder.supplier', 'details.part', 'createdBy');
+
+        $stockMovements = $receiving->stockMovements()->with('rak')->get();
+
+        return view('admin.receivings.show', compact('receiving', 'stockMovements'));
     }
 
     private function generateReceivingNumber()

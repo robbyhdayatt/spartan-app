@@ -30,21 +30,21 @@ class PutawayController extends Controller
     {
         $this->authorize('can-putaway');
         if ($receiving->status !== 'PENDING_PUTAWAY') {
-            return redirect()->route('admin.putaway.index')->with('error', 'Penerimaan ini sudah diproses.');
+            return redirect()->route('admin.putaway.index')->with('error', 'Penerimaan ini tidak siap untuk proses Putaway.');
         }
 
-        // Get only items that passed QC and haven't been stored yet
-        $receiving->load(['details' => function ($query) {
-            $query->where('qty_lolos_qc', '>', 0);
-        }, 'details.part']);
+        $receiving->load('details.part');
 
-        // Get shelves from the correct warehouse
+        // PERBAIKAN FINAL: Ambil rak yang tipenya PENYIMPANAN
         $raks = Rak::where('gudang_id', $receiving->gudang_id)
-            ->where('is_active', true)
-            ->orderBy('nama_rak')
-            ->get();
+                    ->where('is_active', true)
+                    ->where('tipe_rak', 'PENYIMPANAN') // <-- Menggunakan kolom baru
+                    ->orderBy('kode_rak')
+                    ->get();
 
-        return view('admin.putaway.form', compact('receiving', 'raks'));
+        $itemsToPutaway = $receiving->details()->where('qty_lolos_qc', '>', 0)->get();
+
+        return view('admin.putaway.form', compact('receiving', 'itemsToPutaway', 'raks'));
     }
 
     // Store the items onto the shelves and update inventory

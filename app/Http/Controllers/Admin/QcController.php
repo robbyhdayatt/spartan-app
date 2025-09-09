@@ -36,74 +36,88 @@ class QcController extends Controller
     }
 
     // Store the QC results
-    public function storeQcResult(Request $request, Receiving $receiving)
-    {
-        $this->authorize('can-qc');
+public function storeQcResult(Request $request, Receiving $receiving)
+{
+    $this->authorize('can-qc');
 
-        $request->validate([
-            'items' => 'required|array',
-            'items.*.qty_lolos' => 'required|integer|min:0',
-            'items.*.qty_gagal' => 'required|integer|min:0',
-            'items.*.catatan_qc' => 'nullable|string',
-        ]);
+    // Validasi input dari form
+    $request->validate([
+        'items' => 'required|array',
+        'items.*.qty_lolos' => 'required|integer|min:0',
+        'items.*.qty_gagal' => 'required|integer|min:0',
+        'items.*.catatan_qc' => 'nullable|string',
+    ]);
 
-        DB::beginTransaction();
-        try {
-            foreach ($request->items as $detailId => $data) {
-                $detail = ReceivingDetail::findOrFail($detailId);
-                $qtyLolos = $data['qty_lolos'];
-                $qtyGagal = $data['qty_gagal'];
-                $totalInput = $qtyLolos + $qtyGagal;
+    DB::beginTransaction();
+    try {
+        foreach ($request->items as $detailId => $data) {
+            $detail = ReceivingDetail::findOrFail($detailId);
 
-                if ($totalInput > $detail->qty_terima) {
-                    throw new \Exception('Jumlah Lolos & Gagal QC melebihi jumlah diterima untuk part ' . $detail->part->nama_part);
-                }
+            $qtyLolos = (int) $data['qty_lolos'];
+            $qtyGagal = (int) $data['qty_gagal'];
+            $totalInput = $qtyLolos + $qtyGagal;
 
-                $detail->update([
-                    'qty_lolos_qc' => $qtyLolos,
-                    'qty_gagal_qc' => $qtyGagal,
-                    'catatan_qc' => $data['catatan_qc'],
-                ]);
-
-                // Handle the remaining "limbo" stock
-                $sisa = $detail->qty_terima - $totalInput;
-                if ($sisa > 0) {
-                    $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
-                                        ->where('kode_rak', 'like', '%-KRN-QC')
-                                        ->firstOrFail();
-
-                    $inventory = \App\Models\Inventory::firstOrCreate(
-                        ['part_id' => $detail->part_id, 'rak_id' => $quarantineRak->id],
-                        ['gudang_id' => $receiving->gudang_id, 'quantity' => 0]
-                    );
-
-                    $stokSebelum = $inventory->quantity;
-                    $inventory->quantity += $sisa;
-                    $inventory->save();
-
-                    // Log the movement to quarantine
-                    \App\Models\StockMovement::create([
-                        'part_id' => $detail->part_id, 'gudang_id' => $receiving->gudang_id,
-                        'tipe_gerakan' => 'KARANTINA_QC', 'jumlah' => $sisa,
-                        'stok_sebelum' => $stokSebelum, 'stok_sesudah' => $inventory->quantity,
-                        'referensi' => $receiving->nomor_penerimaan, 'user_id' => Auth::id(),
-                        'keterangan' => 'Sisa barang dari proses QC',
-                    ]);
-                }
+            if ($totalInput > $detail->qty_terima) {
+                throw new \Exception('Jumlah Lolos & Gagal QC (' . $totalInput . ') melebihi jumlah diterima (' . $detail->qty_terima . ') untuk part ' . $detail->part->nama_part);
             }
 
-            // Update the main receiving record status
-            $receiving->status = 'PENDING_PUTAWAY';
-            $receiving->qc_by = Auth::id();
-            $receiving->qc_at = now();
-            $receiving->save();
+            // Update receiving_details dengan hasil QC
+            $detail->update([
+                'qty_lolos_qc' => $qtyLolos,
+                'qty_gagal_qc' => $qtyGagal,
+                'catatan_qc' => $data['catatan_qc'],
+            ]);
 
-            DB::commit();
-            return redirect()->route('admin.qc.index')->with('success', 'Hasil QC disimpan. Item yang lolos siap untuk Putaway.');
+            // Hitung sisa barang yang tidak di-QC untuk dikarantina
+            $sisa = $detail->qty_terima - $totalInput;
+            if ($sisa > 0) {
+                // Cari rak karantina, beri error jika tidak ada
+                $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
+                                    ->where('kode_rak', 'like', '%-KRN-QC')
+                                    ->first();
+                if (!$quarantineRak) {
+                    throw new \Exception('Rak karantina (dengan akhiran kode -KRN-QC) tidak ditemukan di gudang ini. Silakan buat terlebih dahulu.');
+                }
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
+                // Update atau buat inventaris di rak karantina
+                $inventory = \App\Models\Inventory::firstOrCreate(
+                    ['part_id' => $detail->part_id, 'rak_id' => $quarantineRak->id],
+                    ['gudang_id' => $receiving->gudang_id, 'quantity' => 0]
+                );
+
+                $stokSebelum = $inventory->quantity;
+                $inventory->increment('quantity', $sisa);
+
+                // --- PERBAIKAN UTAMA ---
+                // Membuat Stock Movement secara manual sesuai skema database Anda
+                \App\Models\StockMovement::create([
+                    'part_id'       => $detail->part_id,
+                    'gudang_id'     => $receiving->gudang_id,
+                    'rak_id'        => $quarantineRak->id,
+                    'tipe_gerakan'  => 'KARANTINA_QC', // Menggunakan kolom 'tipe_gerakan'
+                    'jumlah'        => $sisa,           // Menggunakan kolom 'jumlah'
+                    'stok_sebelum'  => $stokSebelum,
+                    'stok_sesudah'  => $inventory->quantity,
+                    'referensi'     => 'Receiving:' . $receiving->id, // Menggunakan kolom 'referensi' (varchar)
+                    'user_id'       => Auth::id(),
+                    'keterangan'    => 'Sisa barang dari proses QC otomatis masuk karantina.',
+                ]);
+            }
         }
+
+        // Update status dokumen penerimaan utama
+        $receiving->status = 'PENDING_PUTAWAY';
+        $receiving->qc_by = Auth::id();
+        $receiving->qc_at = now();
+        $receiving->save();
+
+        DB::commit();
+        return redirect()->route('admin.qc.index')->with('success', 'Hasil QC berhasil disimpan.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        // Mengembalikan dengan pesan error yang spesifik agar bisa ditampilkan di view
+        return back()->with('error', 'GAGAL DISIMPAN: ' . $e->getMessage())->withInput();
     }
+}
 }

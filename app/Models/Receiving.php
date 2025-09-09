@@ -38,4 +38,16 @@ class Receiving extends Model
     {
         return $this->belongsTo(User::class, 'received_by');
     }
+
+        public function stockMovements()
+    {
+        // Relasi 'morphMany' digunakan karena stock_movements bisa berelasi
+        // ke banyak model lain (Penjualan, Adjustment, dll)
+        return $this->morphMany(StockMovement::class, 'referensi');
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

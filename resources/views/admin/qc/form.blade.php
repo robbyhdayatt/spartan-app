@@ -14,6 +14,19 @@
             <h3 class="card-title">No. Penerimaan: {{ $receiving->nomor_penerimaan }}</h3>
         </div>
         <div class="card-body">
+            {{-- PERBAIKAN: Tambahkan blok ini untuk menampilkan notifikasi --}}
+            @if(session('success'))
+                <div class="alert alert-success">
+                    {{ session('success') }}
+                </div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            {{-- Blok untuk error validasi (ini sudah benar) --}}
             @if ($errors->any())
                 <div class="alert alert-danger">
                     <ul class="mb-0">
@@ -70,6 +83,7 @@
 @section('js')
 <script>
 $(document).ready(function() {
+    // Fungsi ini untuk memvalidasi satu baris saat diubah
     function validateRow(row) {
         let qtyDiterima = parseInt(row.find('.qty-diterima').val()) || 0;
         let qtyLolos = parseInt(row.find('.qty-lolos').val()) || 0;
@@ -81,31 +95,36 @@ $(document).ready(function() {
         let sisaInput = row.find('.sisa');
         sisaInput.val(sisa);
 
-        // Beri warna jika ada kesalahan
+        // Beri warna merah jika input berlebih (sisa negatif)
         if (sisa < 0) {
-            sisaInput.css('background-color', '#ffdddd'); // Merah muda
+            sisaInput.addClass('is-invalid');
         } else {
-            sisaInput.css('background-color', '#e9ecef'); // Warna default readonly
+            sisaInput.removeClass('is-invalid');
         }
 
-        // Cek semua baris untuk mengaktifkan/menonaktifkan tombol simpan
+        // Panggil fungsi validasi global setiap kali ada perubahan
         validateAllRows();
     }
 
+    // Fungsi ini untuk memeriksa semua baris dan mengatur tombol Simpan
     function validateAllRows() {
-        let allValid = true;
+        let isFormValid = true;
         $('.qc-item-row').each(function() {
+            // Ambil nilai sisa dari setiap baris
             let sisa = parseInt($(this).find('.sisa').val());
-            if (sisa !== 0) {
-                allValid = false;
+
+            // PERBAIKAN: Form dianggap tidak valid HANYA JIKA sisa negatif (input berlebih)
+            if (sisa < 0) {
+                isFormValid = false;
+                return false; // Hentikan loop jika sudah ketemu satu yang tidak valid
             }
         });
 
-        // Tombol simpan hanya aktif jika semua 'sisa' adalah 0
-        $('#submit-btn').prop('disabled', !allValid);
+        // Aktifkan tombol jika form valid, nonaktifkan jika tidak
+        $('#submit-btn').prop('disabled', !isFormValid);
     }
 
-    // Jalankan validasi saat input berubah
+    // Event listener untuk setiap perubahan pada input lolos atau gagal
     $('#qc-items-table').on('input', '.qty-lolos, .qty-gagal', function() {
         validateRow($(this).closest('tr'));
     });
@@ -116,4 +135,14 @@ $(document).ready(function() {
     });
 });
 </script>
+@stop
+
+{{-- Tambahkan CSS untuk menyorot input yang salah --}}
+@section('css')
+<style>
+    .is-invalid {
+        background-color: #f8d7da !important;
+        border-color: #f5c6cb !important;
+    }
+</style>
 @stop

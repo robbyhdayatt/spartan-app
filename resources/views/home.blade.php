@@ -7,6 +7,54 @@
 @stop
 
 @section('content')
+
+    {{-- BARIS UNTUK NOTIFIKASI PERSETUJUAN --}}
+    <div class="row">
+        {{-- 1. Notifikasi Persetujuan Purchase Order --}}
+        @if(isset($pendingApprovals['purchase_orders']) && !$pendingApprovals['purchase_orders']->isEmpty())
+            <div class="col-md-4">
+                <div class="alert alert-warning">
+                    <h5><i class="icon fas fa-file-invoice"></i> Persetujuan PO</h5>
+                    <p>
+                        Ada <strong>{{ $pendingApprovals['purchase_orders']->count() }} PO</strong> menunggu persetujuan Anda.
+                    </p>
+                    <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-sm btn-outline-dark">
+                        Proses Sekarang <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        {{-- 2. Notifikasi Persetujuan Stock Adjustment --}}
+        @if(isset($pendingApprovals['stock_adjustments']) && !$pendingApprovals['stock_adjustments']->isEmpty())
+            <div class="col-md-4">
+                <div class="alert alert-info">
+                    <h5><i class="icon fas fa-edit"></i> Persetujuan Adjustment</h5>
+                    <p>
+                        Ada <strong>{{ $pendingApprovals['stock_adjustments']->count() }} Adjusment Stok</strong> menunggu persetujuan Anda.
+                    </p>
+                    <a href="{{ route('admin.stock-adjustments.index') }}" class="btn btn-sm btn-outline-dark">
+                        Proses Sekarang <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        {{-- 3. Notifikasi Persetujuan Stock Mutation --}}
+        @if(isset($pendingApprovals['stock_mutations']) && !$pendingApprovals['stock_mutations']->isEmpty())
+             <div class="col-md-4">
+                <div class="alert alert-success">
+                    <h5><i class="icon fas fa-truck-loading"></i> Persetujuan Mutasi</h5>
+                    <p>
+                        Ada <strong>{{ $pendingApprovals['stock_mutations']->count() }} Mutasi Stok</strong> menunggu persetujuan Anda.
+                    </p>
+                    <a href="{{ route('admin.stock-mutations.index') }}" class="btn btn-sm btn-outline-dark">
+                        Proses Sekarang <i class="fas fa-arrow-circle-right"></i>
+                    </a>
+                </div>
+            </div>
+        @endif
+    </div>
     {{-- Baris untuk Info Box --}}
     <div class="row">
         <div class="col-lg-3 col-6">

@@ -59,6 +59,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::resource('purchase-orders', PurchaseOrderController::class)->except(['edit', 'update', 'destroy']);
     Route::post('purchase-orders/{purchase_order}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
     Route::post('purchase-orders/{purchase_order}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-orders.reject');
+    Route::get('purchase_orders/{purchaseOrder}/details', [PurchaseOrderController::class, 'getPoDetailsApi'])->name('purchase_orders.details_api');
 
     Route::get('receivings', [ReceivingController::class, 'index'])->name('receivings.index');
     Route::get('receivings/create', [ReceivingController::class, 'create'])->name('receivings.create');

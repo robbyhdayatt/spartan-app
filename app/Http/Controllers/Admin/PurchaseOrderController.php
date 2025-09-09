@@ -168,4 +168,31 @@ class PurchaseOrderController extends Controller
 
         return redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('success', 'Purchase Order berhasil ditolak.');
     }
+
+    public function getPoDetailsApi(PurchaseOrder $purchaseOrder)
+    {
+        // Gunakan Policy untuk keamanan jika ada, atau cek manual
+        // Contoh:
+        // if (auth()->user()->cannot('view', $purchaseOrder)) {
+        //     return response()->json(['error' => 'Unauthorized'], 403);
+        // }
+
+        // Load relasi yang dibutuhkan secara efisien (eager loading)
+        $purchaseOrder->load('details.part');
+
+        // Ubah data menjadi format yang mudah dibaca JavaScript
+        $details = $purchaseOrder->details->map(function ($detail) {
+            return [
+                'po_detail_id' => $detail->id,
+                'part_id' => $detail->part->id,
+                'kode_part' => $detail->part->kode_part,
+                'nama_part' => $detail->part->nama_part,
+                'qty_pesan' => (int) $detail->qty_pesan,
+                'qty_sudah_diterima' => (int) $detail->qty_diterima,
+                'qty_sisa' => (int) ($detail->qty_pesan - $detail->qty_diterima), // Kalkulasi sisa
+            ];
+        });
+
+        return response()->json($details);
+    }
 }
