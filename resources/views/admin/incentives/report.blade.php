@@ -2,8 +2,8 @@
 
 @section('title', 'Laporan Insentif Sales')
 
-{{-- 1. Aktifkan plugin DataTables untuk halaman ini --}}
 @section('plugins.Datatables', true)
+@section('plugins.Sweetalert2', true)
 
 @section('content_header')
     <h1>Laporan Insentif Sales</h1>
@@ -46,7 +46,12 @@
         <h3 class="card-title">Laporan Insentif untuk {{ \Carbon\Carbon::create()->month($bulan)->format('F') }} {{ $tahun }}</h3>
     </div>
     <div class="card-body">
-        {{-- 2. Beri ID pada tabel --}}
+        @if(session('success'))
+            <input type="hidden" id="success-message" value="{{ session('success') }}">
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
         <table id="incentive-report-table" class="table table-bordered table-striped">
             <thead>
                 <tr>
@@ -55,20 +60,43 @@
                     <th class="text-right">Pencapaian</th>
                     <th class="text-right">Persentase</th>
                     <th class="text-right">Jumlah Insentif</th>
+                    <th class="text-center">Status Pembayaran</th>
+                    <th class="text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($reportData as $data)
+                @forelse($reportData as $incentive)
                 <tr>
-                    <td>{{ $data['sales_name'] }}</td>
-                    <td class="text-right">Rp {{ number_format($data['target_amount'], 0, ',', '.') }}</td>
-                    <td class="text-right">Rp {{ number_format($data['total_penjualan'], 0, ',', '.') }}</td>
-                    <td class="text-right">{{ number_format($data['pencapaian'], 2) }}%</td>
-                    <td class="text-right font-weight-bold">Rp {{ number_format($data['jumlah_insentif'], 0, ',', '.') }}</td>
+                    <td>{{ $incentive->user->nama ?? 'N/A' }}</td>
+                    <td class="text-right">Rp {{ number_format($incentive->salesTarget->target_amount ?? 0, 0, ',', '.') }}</td>
+                    <td class="text-right">Rp {{ number_format($incentive->total_penjualan, 0, ',', '.') }}</td>
+                    <td class="text-right">{{ number_format($incentive->persentase_pencapaian, 2) }}%</td>
+                    <td class="text-right font-weight-bold">Rp {{ number_format($incentive->jumlah_insentif, 0, ',', '.') }}</td>
+                    <td class="text-center">
+                        @if($incentive->status == 'PAID')
+                            <span class="badge badge-success">LUNAS</span>
+                        @else
+                            <span class="badge badge-danger">BELUM DIBAYAR</span>
+                        @endif
+                    </td>
+                    <td class="text-center">
+                        @if($incentive->status == 'UNPAID' && $incentive->jumlah_insentif > 0)
+                            <form action="{{ route('admin.incentives.mark-as-paid', $incentive) }}" method="POST" class="d-inline mark-as-paid-form">
+                                @csrf
+                                <button type="submit" class="btn btn-xs btn-success">
+                                    <i class="fas fa-check"></i> Tandai Lunas
+                                </button>
+                            </form>
+                        @elseif($incentive->status == 'PAID')
+                            <span class="text-muted" style="font-size: 0.8rem;">Dibayar pada:<br>{{ \Carbon\Carbon::parse($incentive->paid_at)->format('d-m-Y H:i') }}</span>
+                        @else
+                            -
+                        @endif
+                    </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="5" class="text-center">Belum ada target yang ditetapkan untuk periode ini.</td>
+                    <td colspan="7" class="text-center">Belum ada target yang ditetapkan untuk periode ini.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -80,11 +108,41 @@
 @section('js')
 <script>
     $(document).ready(function() {
-        // 3. Inisialisasi DataTables
         $('#incentive-report-table').DataTable({
             "responsive": true,
             "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
+            "order": [[ 4, "desc" ]]
         });
+
+        // --- KODE JAVASCRIPT FINAL ---
+        $('.mark-as-paid-form').on('submit', function(e) {
+            e.preventDefault();
+            var form = this;
+
+            Swal.fire({
+                title: 'Anda yakin?',
+                text: "Anda akan menandai insentif ini sebagai LUNAS. Aksi ini tidak dapat dibatalkan.",
+                type: 'warning',  // <-- PERBAIKAN: Ubah 'icon' menjadi 'type'
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Ya, Tandai Lunas!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.value) { // Pada versi ini, gunakan 'result.value'
+                    form.submit();
+                }
+            })
+        });
+
+        // Tampilkan notifikasi sukses dari server
+        if ($('#success-message').length) {
+            Swal.fire({
+                title: 'Berhasil!',
+                text: $('#success-message').val(),
+                type: 'success' // <-- PERBAIKAN: Ubah 'icon' menjadi 'type'
+            });
+        }
     });
 </script>
 @stop

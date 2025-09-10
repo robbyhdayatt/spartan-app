@@ -67,7 +67,12 @@ $(document).ready(function() {
         tableBody.html('<tr><td colspan="4" class="text-center">Loading...</td></tr>');
 
         if (receivingId) {
-            let url = `/admin/api/receivings/${receivingId}/failed-items`;
+            // 1. Buat template URL dengan placeholder ':id'
+            let urlTemplate = "{{ route('admin.api.receivings.failed-items', ['receiving' => ':id']) }}";
+
+            // 2. Ganti placeholder ':id' dengan receivingId yang dipilih
+            let url = urlTemplate.replace(':id', receivingId);
+
             $.getJSON(url, function(data) {
                 tableBody.empty();
                 if(data.length > 0) {
@@ -86,6 +91,9 @@ $(document).ready(function() {
                 } else {
                     tableBody.html('<tr><td colspan="4" class="text-center">Tidak ada item yang bisa diretur dari penerimaan ini.</td></tr>');
                 }
+            }).fail(function() {
+                // Tambahan: Memberi pesan jika API gagal diakses
+                tableBody.html('<tr><td colspan="4" class="text-center text-danger">Gagal memuat item. Periksa koneksi atau hubungi administrator.</td></tr>');
             });
         } else {
             tableBody.empty();

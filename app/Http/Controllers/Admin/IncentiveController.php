@@ -7,6 +7,7 @@ use App\Models\SalesTarget;
 use App\Models\User;
 use App\Models\Jabatan;
 use App\Models\Penjualan;
+use App\Models\Incentive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -67,39 +68,60 @@ class IncentiveController extends Controller
 
         $tahun = $request->input('tahun', now()->year);
         $bulan = $request->input('bulan', now()->month);
+        $periode = $tahun . '-' . str_pad($bulan, 2, '0', STR_PAD_LEFT);
 
+        // 1. Hitung ulang dan simpan data untuk memastikan datanya up-to-date
         $targets = SalesTarget::with('user')
             ->where('tahun', $tahun)
             ->where('bulan', $bulan)
             ->get();
 
-        $reportData = [];
-
         foreach ($targets as $target) {
             $totalPenjualan = Penjualan::where('sales_id', $target->user_id)
                 ->whereYear('tanggal_jual', $tahun)
                 ->whereMonth('tanggal_jual', $bulan)
-                ->sum('total_harga');
+                ->sum('subtotal');
 
             $pencapaian = ($target->target_amount > 0) ? ($totalPenjualan / $target->target_amount) * 100 : 0;
             $jumlahInsentif = 0;
 
-            // Aturan Insentif
             if ($pencapaian >= 100) {
                 $jumlahInsentif = $totalPenjualan * 0.02; // 2%
             } elseif ($pencapaian >= 80) {
                 $jumlahInsentif = $totalPenjualan * 0.01; // 1%
             }
 
-            $reportData[] = [
-                'sales_name' => $target->user->nama,
-                'target_amount' => $target->target_amount,
-                'total_penjualan' => $totalPenjualan,
-                'pencapaian' => $pencapaian,
-                'jumlah_insentif' => $jumlahInsentif,
-            ];
+            Incentive::updateOrCreate(
+                ['sales_target_id' => $target->id, 'periode' => $periode],
+                [
+                    'user_id' => $target->user_id,
+                    'total_penjualan' => $totalPenjualan,
+                    'persentase_pencapaian' => $pencapaian,
+                    'jumlah_insentif' => $jumlahInsentif,
+                ]
+            );
         }
 
+        // 2. Ambil data yang sudah final dari tabel incentives
+        $reportData = Incentive::with(['user', 'salesTarget'])
+            ->where('periode', $periode)
+            ->get();
+
         return view('admin.incentives.report', compact('reportData', 'tahun', 'bulan'));
+    }
+
+    // --- METHOD BARU UNTUK MENANDAI PEMBAYARAN ---
+    public function markAsPaid(Incentive $incentive)
+    {
+        $this->authorize('is-manager');
+
+        if ($incentive->status === 'UNPAID') {
+            $incentive->status = 'PAID';
+            $incentive->paid_at = now();
+            $incentive->save();
+            return back()->with('success', 'Insentif untuk ' . $incentive->user->nama . ' telah ditandai sebagai LUNAS.');
+        }
+
+        return back()->with('error', 'Status insentif ini sudah lunas.');
     }
 }

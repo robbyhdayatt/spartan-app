@@ -17,25 +17,39 @@ use App\Models\ReceivingDetail;
 use App\Exports\InventoryValueExport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Exports\StockCardExport;
 
 
 class ReportController extends Controller
 {
     public function stockCard(Request $request)
     {
-        // Ambil semua part untuk pilihan dropdown
+        // Ambil semua part dan gudang untuk pilihan dropdown
         $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
+        $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         $movements = collect(); // Buat koleksi kosong secara default
+
+        // Set default date range ke bulan ini jika tidak ada input
+        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
 
         // Jika ada part yang dipilih dari form, cari datanya
         if ($request->filled('part_id')) {
-            $movements = StockMovement::where('part_id', $request->part_id)
+            $query = StockMovement::where('part_id', $request->part_id)
                 ->with(['gudang', 'user']) // Eager load untuk efisiensi
-                ->latest() // Urutkan dari yang terbaru
-                ->get();
+                ->whereDate('created_at', '>=', $startDate)
+                ->whereDate('created_at', '<=', $endDate);
+
+            // Tambahkan filter gudang jika dipilih
+            if ($request->filled('gudang_id')) {
+                $query->where('gudang_id', $request->gudang_id);
+            }
+
+            // PERBAIKAN: Ubah 'latest()' menjadi 'oldest()' untuk urutan kronologis yang benar
+            $movements = $query->oldest()->get();
         }
 
-        return view('admin.reports.stock_card', compact('parts', 'movements'));
+        return view('admin.reports.stock_card', compact('parts', 'gudangs', 'movements', 'startDate', 'endDate'));
     }
 
 
@@ -135,8 +149,9 @@ class ReportController extends Controller
             ->where('quantity', '>', 0)
             ->get();
 
+        // Ganti 'harga_beli_default' menjadi 'harga_beli_rata_rata'
         $totalValue = $inventoryDetails->sum(function($item) {
-            return $item->quantity * $item->part->harga_beli_default;
+            return $item->quantity * $item->part->harga_beli_rata_rata;
         });
 
         return view('admin.reports.inventory_value', compact('inventoryDetails', 'totalValue'));
@@ -196,5 +211,24 @@ class ReportController extends Controller
     {
         $stocks = \App\Models\Part::withSum('inventories', 'quantity')->latest()->get();
         return view('admin.reports.stock_report', compact('stocks'));
+    }
+    public function exportStockCard(Request $request)
+    {
+        $request->validate([
+            'part_id' => 'required|exists:parts,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date',
+            'gudang_id' => 'nullable|exists:gudangs,id'
+        ]);
+
+        $part = Part::findOrFail($request->part_id);
+        $fileName = 'Kartu Stok - ' . $part->kode_part . ' - ' . $request->start_date . ' sampai ' . $request->end_date . '.xlsx';
+
+        return Excel::download(new StockCardExport(
+            $request->part_id,
+            $request->gudang_id,
+            $request->start_date,
+            $request->end_date
+        ), $fileName);
     }
 }

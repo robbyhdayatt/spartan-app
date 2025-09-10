@@ -121,6 +121,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('incentives/targets', [IncentiveController::class, 'targets'])->name('incentives.targets');
     Route::post('incentives/targets', [IncentiveController::class, 'storeTarget'])->name('incentives.targets.store');
     Route::get('incentives/report', [IncentiveController::class, 'report'])->name('incentives.report');
+    Route::post('incentives/{incentive}/mark-as-paid', [IncentiveController::class, 'markAsPaid'])->name('incentives.mark-as-paid');
+
 
     // === LAPORAN ===
     Route::get('reports/stock-card', [ReportController::class, 'stockCard'])->name('reports.stock-card');
@@ -134,10 +136,14 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('reports/inventory-value', [ReportController::class, 'inventoryValue'])->name('reports.inventory-value');
     Route::get('reports/inventory-value/export', [ReportController::class, 'exportInventoryValue'])->name('reports.inventory-value.export');
     Route::get('reports/sales-purchase-analysis', [ReportController::class, 'salesPurchaseAnalysis'])->name('reports.sales-purchase-analysis');
+    Route::get('reports/stock-card/export', [ReportController::class, 'exportStockCard'])->name('reports.stock-card.export');
+
 
     // === STOCK QUARANTINE ===
     Route::get('quarantine-stock', [QuarantineStockController::class, 'index'])->name('quarantine-stock.index');
     Route::post('quarantine-stock/process', [QuarantineStockController::class, 'process'])->name('quarantine-stock.process');
+    Route::post('quarantine-stock/process-bulk', [QuarantineStockController::class, 'processBulk'])->name('quarantine-stock.process-bulk');
+
 
     // === API (untuk AJAX) ===
     Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');

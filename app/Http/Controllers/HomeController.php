@@ -21,6 +21,8 @@ class HomeController extends Controller
 
     public function index()
     {
+        $this->authorize('view-dashboard');
+
         $user = Auth::user();
         $gudangId = ($user->jabatan->nama_jabatan === 'Kepala Gudang') ? $user->gudang_id : null;
 

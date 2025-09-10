@@ -15,9 +15,7 @@ class PurchaseOrderController extends Controller
 {
     public function index()
     {
-        // Eager load relationships for efficiency
         $purchaseOrders = PurchaseOrder::with(['supplier', 'gudang', 'createdBy'])->latest()->get();
-
         return view('admin.purchase_orders.index', compact('purchaseOrders'));
     }
 
@@ -27,12 +25,9 @@ class PurchaseOrderController extends Controller
         $user = auth()->user();
         $suppliers = \App\Models\Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
 
-        // Cek peran pengguna
         if ($user->jabatan->nama_jabatan === 'PJ Gudang') {
-            // Jika PJ Gudang, hanya ambil gudang tempat dia ditugaskan
             $gudangs = \App\Models\Gudang::where('id', $user->gudang_id)->get();
         } else {
-            // Jika bukan, ambil semua gudang (untuk Super Admin, dll.)
             $gudangs = \App\Models\Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         }
 
@@ -51,6 +46,12 @@ class PurchaseOrderController extends Controller
         return view('admin.purchase_orders.create', compact('suppliers', 'gudangs', 'parts'));
     }
 
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
     public function store(Request $request)
     {
         $this->authorize('create-po');
@@ -62,24 +63,55 @@ class PurchaseOrderController extends Controller
             'items' => 'required|array|min:1',
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.qty' => 'required|integer|min:1',
-            'items.*.harga' => 'required|numeric|min:0',
-            'use_ppn' => 'nullable|boolean', // Tambahkan validasi untuk checkbox PPN
+            // Validasi harga tidak lagi diperlukan karena kita akan mengambilnya dari server
+            // 'items.*.harga' => 'required|numeric|min:0',
+            'use_ppn' => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
         try {
             $subtotal = 0;
-            foreach ($request->items as $item) {
-                $subtotal += $item['qty'] * $item['harga'];
+            $today = now()->toDateString();
+            $itemsToSave = [];
+
+            // --- TAHAP 1: Validasi dan Kalkulasi Ulang Harga di Server ---
+            foreach ($request->items as $itemData) {
+                // Ambil part dari DB beserta harga efektifnya (harga campaign jika ada)
+                $part = Part::where('parts.id', $itemData['part_id'])
+                    ->leftJoin('campaigns', function ($join) use ($today) {
+                        $join->on('parts.id', '=', 'campaigns.part_id')
+                            ->where('campaigns.is_active', true)
+                            ->where('campaigns.tipe', 'PEMBELIAN')
+                            ->where('campaigns.tanggal_mulai', '<=', $today)
+                            ->where('campaigns.tanggal_selesai', '>=', $today);
+                    })
+                    ->select('parts.*', DB::raw('COALESCE(campaigns.harga_promo, parts.harga_beli_default) as effective_price'))
+                    ->firstOrFail();
+
+                $hargaBeliAktual = $part->effective_price;
+                $qty = $itemData['qty'];
+                $itemSubtotal = $qty * $hargaBeliAktual;
+
+                // Kumpulkan data yang sudah divalidasi
+                $itemsToSave[] = [
+                    'part_id' => $part->id,
+                    'qty_pesan' => $qty,
+                    'harga_beli' => $hargaBeliAktual,
+                    'subtotal' => $itemSubtotal,
+                ];
+
+                // Akumulasi subtotal keseluruhan
+                $subtotal += $itemSubtotal;
             }
 
+            // --- TAHAP 2: Hitung Pajak dan Total ---
             $pajak = 0;
             if ($request->has('use_ppn') && $request->use_ppn) {
                 $pajak = $subtotal * 0.11;
             }
-
             $totalAmount = $subtotal + $pajak;
 
+            // --- TAHAP 3: Simpan Purchase Order dan Detailnya ---
             $po = PurchaseOrder::create([
                 'nomor_po' => $this->generatePoNumber(),
                 'tanggal_po' => $request->tanggal_po,
@@ -93,18 +125,11 @@ class PurchaseOrderController extends Controller
                 'total_amount' => $totalAmount,
             ]);
 
-            foreach ($request->items as $item) {
-                $itemSubtotal = $item['qty'] * $item['harga'];
-                $po->details()->create([
-                    'part_id' => $item['part_id'],
-                    'qty_pesan' => $item['qty'],
-                    'harga_beli' => $item['harga'],
-                    'subtotal' => $itemSubtotal,
-                ]);
-            }
+            // Simpan semua item detail yang sudah divalidasi harganya
+            $po->details()->createMany($itemsToSave);
 
             DB::commit();
-            return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dibuat.');
+            return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dibuat dengan harga yang tervalidasi.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -114,17 +139,11 @@ class PurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder)
     {
-        // Muat semua relasi seperti biasa
         $purchaseOrder->load(['supplier', 'gudang', 'details.part']);
-
-        // Ambil nama pengguna secara manual di sini
         $creatorName = \App\Models\User::find($purchaseOrder->created_by)->name ?? 'User Tidak Dikenal';
-
-        // Hapus dd() yang sebelumnya dan kirim variabel baru ke view
         return view('admin.purchase_orders.show', compact('purchaseOrder', 'creatorName'));
     }
 
-    // Helper function to generate a unique PO number
     private function generatePoNumber()
     {
         $date = now()->format('Ymd');
@@ -136,10 +155,8 @@ class PurchaseOrderController extends Controller
     public function approve(PurchaseOrder $purchaseOrder)
     {
         $this->authorize('perform-approval', $purchaseOrder);
-        // Otorisasi menggunakan Gate
         $this->authorize('approve-po', $purchaseOrder);
 
-        // Validasi status
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Hanya PO yang berstatus PENDING APPROVAL yang bisa disetujui.');
         }
@@ -155,10 +172,8 @@ class PurchaseOrderController extends Controller
     public function reject(PurchaseOrder $purchaseOrder)
     {
         $this->authorize('perform-approval', $purchaseOrder);
-        // Otorisasi menggunakan Gate
         $this->authorize('approve-po', $purchaseOrder);
 
-        // Validasi status
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Hanya PO yang berstatus PENDING APPROVAL yang bisa ditolak.');
         }
@@ -171,16 +186,7 @@ class PurchaseOrderController extends Controller
 
     public function getPoDetailsApi(PurchaseOrder $purchaseOrder)
     {
-        // Gunakan Policy untuk keamanan jika ada, atau cek manual
-        // Contoh:
-        // if (auth()->user()->cannot('view', $purchaseOrder)) {
-        //     return response()->json(['error' => 'Unauthorized'], 403);
-        // }
-
-        // Load relasi yang dibutuhkan secara efisien (eager loading)
         $purchaseOrder->load('details.part');
-
-        // Ubah data menjadi format yang mudah dibaca JavaScript
         $details = $purchaseOrder->details->map(function ($detail) {
             return [
                 'po_detail_id' => $detail->id,
@@ -189,7 +195,7 @@ class PurchaseOrderController extends Controller
                 'nama_part' => $detail->part->nama_part,
                 'qty_pesan' => (int) $detail->qty_pesan,
                 'qty_sudah_diterima' => (int) $detail->qty_diterima,
-                'qty_sisa' => (int) ($detail->qty_pesan - $detail->qty_diterima), // Kalkulasi sisa
+                'qty_sisa' => (int) ($detail->qty_pesan - $detail->qty_diterima),
             ];
         });
 

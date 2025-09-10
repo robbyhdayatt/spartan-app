@@ -116,7 +116,7 @@ class AuthServiceProvider extends ServiceProvider
         });
 
         Gate::define('view-dashboard', function(User $user) {
-            return in_array($user->jabatan->nama_jabatan, ['Manajer Area', 'Kepala Gudang']);
+            return in_array($user->jabatan->nama_jabatan, ['Super Admin', 'Manajer Area', 'Kepala Gudang']);
         });
         Gate::define('manage-sales-targets', function (User $user) {
             return in_array($user->jabatan->nama_jabatan, ['Manajer Area']);

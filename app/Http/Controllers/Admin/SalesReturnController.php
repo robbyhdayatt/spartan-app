@@ -43,17 +43,24 @@ class SalesReturnController extends Controller
 
         $penjualan = Penjualan::findOrFail($request->penjualan_id);
 
-        // Cek apakah ada item yang valid untuk diretur
         if (empty($request->items)) {
             return redirect()->back()->with('error', 'Tidak ada item yang dipilih untuk diretur.');
         }
 
-        $subtotalRetur = 0;
+        // --- LOGIKA BARU YANG LEBIH SPESIFIK ---
+        // Cari rak karantina yang tipenya KARANTINA dan namanya 'Rak Karantina Retur'
+        $rakKarantina = Rak::where('gudang_id', $penjualan->gudang_id)
+                        ->where('tipe_rak', 'KARANTINA')
+                        ->where('nama_rak', 'Rak Karantina Retur') // Cari berdasarkan nama spesifik
+                        ->first();
 
-        // Gunakan DB Transaction untuk memastikan integritas data
+        if (!$rakKarantina) {
+            return redirect()->back()->with('error', 'Rak dengan nama "Rak Karantina Retur" dan tipe "KARANTINA" tidak ditemukan di gudang ini. Hubungi administrator.');
+        }
+        // --- AKHIR LOGIKA BARU ---
+
         DB::beginTransaction();
         try {
-            // Buat Dokumen Induk Retur
             $salesReturn = SalesReturn::create([
                 'nomor_retur_jual' => SalesReturn::generateReturnNumber(),
                 'penjualan_id' => $penjualan->id,
@@ -62,8 +69,10 @@ class SalesReturnController extends Controller
                 'tanggal_retur' => $request->tanggal_retur,
                 'catatan' => $request->catatan,
                 'created_by' => auth()->id(),
-                'total_retur' => 0, // Akan kita update nanti
+                'total_retur' => 0,
             ]);
+
+            $subtotalRetur = 0;
 
             foreach ($request->items as $penjualanDetailId => $itemData) {
                 $penjualanDetail = PenjualanDetail::findOrFail($penjualanDetailId);
@@ -71,15 +80,12 @@ class SalesReturnController extends Controller
                 $maxQty = $penjualanDetail->qty_jual - $penjualanDetail->qty_diretur;
 
                 if ($qtyRetur <= 0 || $qtyRetur > $maxQty) {
-                    // Jika user mencoba meretur lebih dari yang seharusnya, batalkan proses
                     throw new \Exception("Jumlah retur untuk part {$penjualanDetail->part->nama_part} tidak valid.");
                 }
 
-                // Hitung subtotal untuk item ini
                 $itemSubtotal = $penjualanDetail->harga_jual * $qtyRetur;
                 $subtotalRetur += $itemSubtotal;
 
-                // Buat Detail Retur
                 $salesReturn->details()->create([
                     'part_id' => $penjualanDetail->part_id,
                     'qty_retur' => $qtyRetur,
@@ -87,21 +93,7 @@ class SalesReturnController extends Controller
                     'subtotal' => $itemSubtotal,
                 ]);
 
-                // Update kuantitas yang sudah diretur di detail penjualan
                 $penjualanDetail->increment('qty_diretur', $qtyRetur);
-
-                // **PERBAIKAN: Gunakan firstOrCreate untuk membuat rak karantina jika belum ada**
-                $rakKarantina = Rak::firstOrCreate(
-                    [
-                        'gudang_id' => $penjualan->gudang_id,
-                        'kode_rak'  => 'KARANTINA-RETUR-JUAL' // Kunci unik untuk pencarian
-                    ],
-                    [
-                        'nama_rak'  => 'Karantina Retur Penjualan', // Data ini hanya dipakai jika membuat baru
-                        'tipe_rak'  => 'KARANTINA_RETUR',
-                        'is_active' => 1
-                    ]
-                );
 
                 $inventory = Inventory::firstOrCreate(
                     ['part_id' => $penjualanDetail->part_id, 'rak_id' => $rakKarantina->id],
@@ -110,26 +102,23 @@ class SalesReturnController extends Controller
                 $inventory->increment('quantity', $qtyRetur);
             }
 
-            // === KALKULASI PAJAK DAN TOTAL AKHIR ===
             $taxRate = 0;
-            // Cek apakah faktur penjualan asli punya subtotal dan pajak
             if ($penjualan->subtotal > 0 && $penjualan->pajak > 0) {
-                 // Gunakan kolom 'pajak' yang benar dari tabel penjualan, bukan 'ppn_jumlah'
                 $taxRate = $penjualan->pajak / $penjualan->subtotal;
             }
 
             $pajakRetur = $subtotalRetur * $taxRate;
             $totalRetur = $subtotalRetur + $pajakRetur;
 
-            // Update total dan subtotal di dokumen retur
-            $salesReturn->subtotal = $subtotalRetur;
-            $salesReturn->pajak = $pajakRetur;
-            $salesReturn->total_retur = $totalRetur;
-            $salesReturn->save();
+            $salesReturn->update([
+                'subtotal' => $subtotalRetur,
+                'pajak' => $pajakRetur,
+                'total_retur' => $totalRetur,
+            ]);
 
             DB::commit();
 
-            return redirect()->route('admin.sales-returns.show', $salesReturn)->with('success', 'Retur penjualan berhasil dibuat.');
+            return redirect()->route('admin.sales-returns.show', $salesReturn)->with('success', 'Retur penjualan berhasil dibuat dan barang telah masuk ke karantina.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -162,7 +151,7 @@ class SalesReturnController extends Controller
     public function getReturnableItems(Penjualan $penjualan)
     {
         $penjualan->load('details.part');
-        
+
         $returnableItems = $penjualan->details->filter(function ($detail) {
             return $detail->qty_jual > $detail->qty_diretur;
         })->values();

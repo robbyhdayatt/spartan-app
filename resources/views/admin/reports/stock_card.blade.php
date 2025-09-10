@@ -3,6 +3,7 @@
 @section('title', 'Laporan Kartu Stok')
 
 @section('plugins.Datatables', true)
+@section('plugins.Select2', true)
 
 @section('content_header')
     <h1>Laporan Kartu Stok</h1>
@@ -12,24 +13,61 @@
     {{-- Form Filter --}}
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">Pilih Part</h3>
+            <h3 class="card-title">Filter Laporan</h3>
         </div>
         <div class="card-body">
             <form action="{{ route('admin.reports.stock-card') }}" method="GET">
-                <div class="form-group row">
-                    <label for="part_id" class="col-sm-2 col-form-label">Spare Part</label>
-                    <div class="col-sm-8">
-                        <select name="part_id" id="part_id" class="form-control" required>
-                            <option value="" disabled selected>--- Pilih Spare Part ---</option>
-                            @foreach($parts as $part)
-                                <option value="{{ $part->id }}" {{ request('part_id') == $part->id ? 'selected' : '' }}>
-                                    {{ $part->nama_part }} ({{ $part->kode_part }})
-                                </option>
-                            @endforeach
-                        </select>
+                <div class="row align-items-end">
+                    {{-- Filter Part --}}
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>Spare Part</label>
+                            <select name="part_id" id="part_id" class="form-control" required>
+                                <option></option> {{-- Option kosong untuk placeholder Select2 --}}
+                                @foreach($parts as $part)
+                                    <option value="{{ $part->id }}" {{ request('part_id') == $part->id ? 'selected' : '' }}>
+                                        {{ $part->nama_part }} ({{ $part->kode_part }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
-                    <div class="col-sm-2">
-                        <button type="submit" class="btn btn-primary">Tampilkan</button>
+
+                    {{-- Filter Gudang --}}
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Gudang (Opsional)</label>
+                            <select name="gudang_id" id="gudang_id" class="form-control">
+                                <option value="">Semua Gudang</option>
+                                @foreach($gudangs as $gudang)
+                                     <option value="{{ $gudang->id }}" {{ request('gudang_id') == $gudang->id ? 'selected' : '' }}>
+                                        {{ $gudang->nama_gudang }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    {{-- Filter Tanggal (diganti jadi input biasa) --}}
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Tanggal Mulai</label>
+                            <input type="date" name="start_date" class="form-control" value="{{ $startDate }}">
+                        </div>
+                    </div>
+                     <div class="col-md-2">
+                        <div class="form-group">
+                            <label>Tanggal Selesai</label>
+                            <input type="date" name="end_date" class="form-control" value="{{ $endDate }}">
+                        </div>
+                    </div>
+
+                    <div class="col-md-1">
+                        <div class="form-group">
+                             <button type="submit" class="btn btn-primary btn-block">
+                                <i class="fas fa-search"></i>
+                             </button>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -41,6 +79,11 @@
     <div class="card">
         <div class="card-header">
             <h3 class="card-title">Riwayat Pergerakan Stok</h3>
+            <div class="card-tools">
+                <a href="{{ route('admin.reports.stock-card.export', request()->all()) }}" class="btn btn-sm btn-success">
+                    <i class="fas fa-file-excel"></i> Export to Excel
+                </a>
+            </div>
         </div>
         <div class="card-body">
             <table id="stock-table" class="table table-bordered table-striped">
@@ -60,7 +103,7 @@
                     @forelse($movements as $move)
                     <tr>
                         <td>{{ $move->created_at->format('d-m-Y H:i') }}</td>
-                        <td>{{ $move->gudang->nama_gudang }}</td>
+                        <td>{{ $move->gudang->nama_gudang ?? 'N/A' }}</td>
                         <td>{{ str_replace('_', ' ', $move->tipe_gerakan) }}</td>
                         <td class="text-right font-weight-bold {{ $move->jumlah > 0 ? 'text-success' : 'text-danger' }}">
                             {{ ($move->jumlah > 0 ? '+' : '') . $move->jumlah }}
@@ -68,11 +111,11 @@
                         <td class="text-right">{{ $move->stok_sebelum }}</td>
                         <td class="text-right">{{ $move->stok_sesudah }}</td>
                         <td>{{ $move->referensi }}</td>
-                        <td>{{ $move->user->nama }}</td>
+                        <td>{{ $move->user->nama ?? 'Sistem' }}</td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="text-center">Tidak ada riwayat pergerakan untuk part ini.</td>
+                        <td colspan="8" class="text-center">Tidak ada riwayat pergerakan untuk part ini pada periode yang dipilih.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -82,18 +125,20 @@
     @endif
 @stop
 
-{{-- Tambahkan Select2 untuk dropdown yang lebih baik --}}
-@section('plugins.Select2', true)
-
 @section('js')
 <script>
     $(document).ready(function() {
+        // Inisialisasi Select2
         $('#part_id').select2({
             placeholder: "--- Pilih Spare Part ---"
         });
+        $('#gudang_id').select2();
+
+        // Inisialisasi DataTable
         $('#stock-table').DataTable({
             "responsive": true,
             "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],
+            "order": [[ 0, "asc" ]]
         });
     });
 </script>

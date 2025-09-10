@@ -40,7 +40,7 @@
                         <th>Part</th>
                         <th>Rak</th>
                         <th class="text-right">Stok</th>
-                        <th class="text-right">Harga Beli Satuan</th>
+                        <th class="text-right">Harga Beli Rata-Rata</th>
                         <th class="text-right">Subtotal Nilai</th>
                     </tr>
                 </thead>
@@ -51,8 +51,8 @@
                         <td>{{ $item->part->nama_part }} ({{ $item->part->kode_part }})</td>
                         <td>{{ $item->rak->nama_rak }} ({{ $item->rak->kode_rak }})</td>
                         <td class="text-right">{{ $item->quantity }}</td>
-                        <td class="text-right">{{ number_format($item->part->harga_beli_default, 0, ',', '.') }}</td>
-                        <td class="text-right font-weight-bold">{{ number_format($item->quantity * $item->part->harga_beli_default, 0, ',', '.') }}</td>
+                        <td class="text-right">{{ number_format($item->part->harga_beli_rata_rata, 0, ',', '.') }}</td>
+                        <td class="text-right font-weight-bold">{{ number_format($item->quantity * $item->part->harga_beli_rata_rata, 0, ',', '.') }}</td>
                     </tr>
                     @empty
                     <tr>

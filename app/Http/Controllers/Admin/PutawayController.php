@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
+use App\Models\Part; // <-- Tambahkan ini
+use App\Models\PurchaseOrderDetail; // <-- Tambahkan ini
 use App\Models\Rak;
 use App\Models\Receiving;
 use App\Models\ReceivingDetail;
@@ -35,12 +37,11 @@ class PutawayController extends Controller
 
         $receiving->load('details.part');
 
-        // PERBAIKAN FINAL: Ambil rak yang tipenya PENYIMPANAN
         $raks = Rak::where('gudang_id', $receiving->gudang_id)
-                    ->where('is_active', true)
-                    ->where('tipe_rak', 'PENYIMPANAN') // <-- Menggunakan kolom baru
-                    ->orderBy('kode_rak')
-                    ->get();
+                       ->where('is_active', true)
+                       ->where('tipe_rak', 'PENYIMPANAN')
+                       ->orderBy('kode_rak')
+                       ->get();
 
         $itemsToPutaway = $receiving->details()->where('qty_lolos_qc', '>', 0)->get();
 
@@ -59,17 +60,44 @@ class PutawayController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->items as $detailId => $data) {
-                $detail = ReceivingDetail::findOrFail($detailId);
+                $detail = ReceivingDetail::with('part')->findOrFail($detailId);
+                $part = $detail->part;
+                $jumlahMasuk = $detail->qty_lolos_qc;
+
+                if ($jumlahMasuk <= 0) {
+                    continue;
+                }
+
+                $poDetail = PurchaseOrderDetail::where('purchase_order_id', $receiving->purchase_order_id)
+                                            ->where('part_id', $part->id)
+                                            ->first();
+
+                // === PERBAIKAN DI SINI ===
+                $hargaBeliBaru = $poDetail ? $poDetail->harga_beli : $part->harga_beli_default;
+
+                $stokLama = Part::where('id', $part->id)->withSum('inventories', 'quantity')->first()->inventories_sum_quantity ?? 0;
+                $hargaRataRataLama = $part->harga_beli_rata_rata;
+
+                $totalNilaiLama = $stokLama * $hargaRataRataLama;
+                $totalNilaiBaru = $jumlahMasuk * $hargaBeliBaru;
+                $totalStokBaru = $stokLama + $jumlahMasuk;
+
+                if ($totalStokBaru > 0) {
+                    $hargaRataRataBaru = ($totalNilaiLama + $totalNilaiBaru) / $totalStokBaru;
+                } else {
+                    $hargaRataRataBaru = $hargaBeliBaru;
+                }
+
+                $part->harga_beli_rata_rata = $hargaRataRataBaru;
+                $part->save();
+
                 $inventory = Inventory::firstOrCreate(
                     ['part_id' => $detail->part_id, 'rak_id' => $data['rak_id']],
                     ['gudang_id' => $receiving->gudang_id, 'quantity' => 0]
                 );
 
-                // --- MULAI LOGGING ---
                 $stokSebelum = $inventory->quantity;
-                $jumlah = $detail->qty_lolos_qc;
-                $stokSesudah = $stokSebelum + $jumlah;
-
+                $stokSesudah = $stokSebelum + $jumlahMasuk;
                 $inventory->quantity = $stokSesudah;
                 $inventory->save();
 
@@ -77,22 +105,21 @@ class PutawayController extends Controller
                     'part_id' => $detail->part_id,
                     'gudang_id' => $receiving->gudang_id,
                     'tipe_gerakan' => 'PEMBELIAN',
-                    'jumlah' => $jumlah, // Positif untuk stok masuk
+                    'jumlah' => $jumlahMasuk,
                     'stok_sebelum' => $stokSebelum,
                     'stok_sesudah' => $stokSesudah,
                     'referensi' => $receiving->nomor_penerimaan,
                     'user_id' => Auth::id(),
                 ]);
-                // --- AKHIR LOGGING ---
 
-                $detail->update(['qty_disimpan' => $detail->qty_lolos_qc]);
+                $detail->update(['qty_disimpan' => $jumlahMasuk]);
             }
 
             $receiving->status = 'COMPLETED';
             $receiving->save();
 
             DB::commit();
-            return redirect()->route('admin.putaway.index')->with('success', 'Barang berhasil disimpan dan stok telah diperbarui.');
+            return redirect()->route('admin.putaway.index')->with('success', 'Barang berhasil disimpan, stok, dan harga rata-rata telah diperbarui.');
 
         } catch (\Exception $e) {
             DB::rollBack();
