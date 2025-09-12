@@ -21,10 +21,12 @@ class LoginController extends Controller
 
     use AuthenticatesUsers;
 
-    protected function redirectTo()
-    {
-        return route('admin.profile.show');
-    }
+    /**
+     * Where to redirect users after login.
+     *
+     * @var string
+     */
+    protected $redirectTo = RouteServiceProvider::HOME;
 
     /**
      * Create a new controller instance.
@@ -35,7 +37,7 @@ class LoginController extends Controller
     {
         $this->middleware('guest')->except('logout');
     }
-    /**
+     /**
      * Get the login username to be used by the controller.
      *
      * @return string

@@ -154,7 +154,7 @@ class PurchaseOrderController extends Controller
 
     public function approve(PurchaseOrder $purchaseOrder)
     {
-        $this->authorize('perform-approval', $purchaseOrder);
+        // Cukup gunakan satu otorisasi yang sudah jelas
         $this->authorize('approve-po', $purchaseOrder);
 
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
@@ -169,16 +169,23 @@ class PurchaseOrderController extends Controller
         return redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('success', 'Purchase Order berhasil disetujui.');
     }
 
-    public function reject(PurchaseOrder $purchaseOrder)
+    public function reject(Request $request, PurchaseOrder $purchaseOrder) // Tambahkan Request $request
     {
-        $this->authorize('perform-approval', $purchaseOrder);
         $this->authorize('approve-po', $purchaseOrder);
+
+        // Validasi bahwa alasan penolakan wajib diisi
+        $request->validate([
+            'rejection_reason' => 'required|string|min:10',
+        ]);
 
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Hanya PO yang berstatus PENDING APPROVAL yang bisa ditolak.');
         }
 
         $purchaseOrder->status = 'REJECTED';
+        $purchaseOrder->rejection_reason = $request->rejection_reason; // Simpan alasan penolakan
+        $purchaseOrder->approved_by = Auth::id(); // Catat siapa yang menolak
+        $purchaseOrder->approved_at = now(); // Catat kapan ditolak
         $purchaseOrder->save();
 
         return redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('success', 'Purchase Order berhasil ditolak.');

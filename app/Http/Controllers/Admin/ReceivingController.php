@@ -13,19 +13,37 @@ class ReceivingController extends Controller
 {
     public function index()
     {
-        $receivings = Receiving::with(['purchaseOrder', 'gudang', 'receivedBy'])->latest()->get();
+        $user = Auth::user();
+
+        // Memulai query dasar
+        $query = \App\Models\Receiving::with(['purchaseOrder', 'gudang', 'receivedBy']);
+
+        // Terapkan filter gudang berdasarkan peran
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
+            $query->where('gudang_id', $user->gudang_id);
+        }
+
+        // Ambil data setelah difilter dan diurutkan
+        $receivings = $query->latest()->paginate(15); // Menggunakan paginate untuk halaman yang lebih rapi
+
         return view('admin.receivings.index', compact('receivings'));
     }
 
     public function create()
     {
+        $this->authorize('can-receive');
+
         $user = Auth::user();
-        // PERBAIKAN: Gunakan whereIn untuk mengambil PO yang masih relevan
-        $purchaseOrders = PurchaseOrder::whereIn('status', ['APPROVED', 'PARTIALLY_RECEIVED'])
-            ->where('gudang_id', $user->gudang_id)
-            ->with('supplier')
-            ->orderBy('tanggal_po', 'desc') // Tambahan: urutkan agar yg terbaru di atas
-            ->get();
+
+        // Memulai query untuk mengambil PO yang statusnya APPROVED
+        $query = PurchaseOrder::where('status', 'APPROVED');
+
+        // Terapkan filter gudang HANYA jika user BUKAN Super Admin atau Manajer Area
+        if (!in_array($user->jabatan->singkatan, ['SA'])) {
+            $query->where('gudang_id', $user->gudang_id);
+        }
+
+        $purchaseOrders = $query->orderBy('tanggal_po', 'desc')->get();
 
         return view('admin.receivings.create', compact('purchaseOrders'));
     }

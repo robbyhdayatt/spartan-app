@@ -19,10 +19,19 @@ class PutawayController extends Controller
     public function index()
     {
         $this->authorize('can-putaway');
-        $receivings = Receiving::where('status', 'PENDING_PUTAWAY')
-            ->with(['purchaseOrder.supplier', 'gudang'])
-            ->latest()
-            ->get();
+        $user = Auth::user();
+
+        // Memulai query dasar untuk mengambil data penerimaan yang sudah lolos QC
+        $query = \App\Models\Receiving::where('status', 'PENDING_PUTAWAY')
+                                    ->with(['purchaseOrder', 'gudang']);
+
+        // Terapkan filter gudang berdasarkan peran
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
+            $query->where('gudang_id', $user->gudang_id);
+        }
+
+        // Ambil data setelah difilter dan diurutkan
+        $receivings = $query->latest('qc_at')->paginate(15);
 
         return view('admin.putaway.index', compact('receivings'));
     }

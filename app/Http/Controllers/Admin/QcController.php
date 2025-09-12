@@ -15,11 +15,20 @@ class QcController extends Controller
     // Show a list of receiving records waiting for QC
     public function index()
     {
-        $this->authorize('can-qc'); // Good to secure this page too
-        $receivings = Receiving::where('status', 'PENDING_QC')
-            ->with(['purchaseOrder.supplier', 'gudang'])
-            ->latest()
-            ->get();
+        $this->authorize('can-qc');
+        $user = Auth::user();
+
+        // Memulai query dasar untuk mengambil data penerimaan yang menunggu QC
+        $query = \App\Models\Receiving::where('status', 'PENDING_QC')
+                                    ->with(['purchaseOrder', 'gudang']);
+
+        // Terapkan filter gudang berdasarkan peran
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
+            $query->where('gudang_id', $user->gudang_id);
+        }
+
+        // Ambil data setelah difilter dan diurutkan
+        $receivings = $query->latest('tanggal_terima')->paginate(15);
 
         return view('admin.qc.index', compact('receivings'));
     }

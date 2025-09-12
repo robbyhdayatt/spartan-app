@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\IncentiveController;
 use App\Http\Controllers\HomeController; // Import HomeController
 use App\Http\Controllers\Admin\QuarantineStockController;
+use App\Http\Controllers\Admin\MutationReceivingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -141,14 +142,21 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 
     // === STOCK QUARANTINE ===
     Route::get('quarantine-stock', [QuarantineStockController::class, 'index'])->name('quarantine-stock.index');
+    Route::post('quarantine-stock/move', [QuarantineStockController::class, 'moveToQuarantine'])->name('quarantine-stock.move'); // <-- TAMBAHKAN INI
     Route::post('quarantine-stock/process', [QuarantineStockController::class, 'process'])->name('quarantine-stock.process');
     Route::post('quarantine-stock/process-bulk', [QuarantineStockController::class, 'processBulk'])->name('quarantine-stock.process-bulk');
 
+
+    // === PENERIMAAN MUTASI ===
+    Route::get('mutation-receiving', [\App\Http\Controllers\Admin\MutationReceivingController::class, 'index'])->name('mutation-receiving.index');
+    Route::get('mutation-receiving/{mutation}', [\App\Http\Controllers\Admin\MutationReceivingController::class, 'show'])->name('mutation-receiving.show');
+    Route::post('mutation-receiving/{mutation}', [\App\Http\Controllers\Admin\MutationReceivingController::class, 'receive'])->name('mutation-receiving.receive');
 
     // === API (untuk AJAX) ===
     Route::get('api/gudangs/{gudang}/parts', [PenjualanController::class, 'getPartsByGudang'])->name('api.gudang.parts');
     Route::get('api/parts/{part}/stock', [PenjualanController::class, 'getPartStockDetails'])->name('api.part.stock');
     Route::get('api/gudangs/{gudang}/raks', [StockMutationController::class, 'getRaksByGudang'])->name('api.gudang.raks');
+    Route::get('api/gudangs/{gudang}/raks', [StockAdjustmentController::class, 'getRaksByGudang'])->name('api.gudang.raks.for.adjustment');
     Route::get('/api/gudangs/{gudang}/parts-with-stock', [StockMutationController::class, 'getPartsWithStock'])->name('api.gudang.parts-with-stock');
     Route::get('api/receivings/{receiving}/failed-items', [PurchaseReturnController::class, 'getFailedItems'])->name('api.receivings.failed-items');
     Route::get('api/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('api.penjualans.returnable-items');

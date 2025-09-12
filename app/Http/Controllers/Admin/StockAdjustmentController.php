@@ -7,6 +7,7 @@ use App\Models\StockAdjustment;
 use App\Models\Inventory;
 use App\Models\Part;
 use App\Models\Gudang;
+use App\Models\Rak;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -40,17 +41,22 @@ class StockAdjustmentController extends Controller
     public function store(Request $request)
     {
         $this->authorize('can-manage-stock');
+
+        // 1. Tambahkan rak_id ke dalam validasi
         $validated = $request->validate([
             'part_id' => 'required|exists:parts,id',
             'gudang_id' => 'required|exists:gudangs,id',
+            'rak_id' => 'required|exists:raks,id', // Validasi baru
             'tipe' => 'required|in:TAMBAH,KURANG',
             'jumlah' => 'required|integer|min:1',
             'alasan' => 'required|string',
         ]);
 
+        // 2. Tambahkan rak_id saat membuat data baru
         StockAdjustment::create([
             'part_id' => $validated['part_id'],
             'gudang_id' => $validated['gudang_id'],
+            'rak_id' => $validated['rak_id'], // Data baru yang disimpan
             'tipe' => $validated['tipe'],
             'jumlah' => $validated['jumlah'],
             'alasan' => $validated['alasan'],
@@ -63,25 +69,35 @@ class StockAdjustmentController extends Controller
 
     public function approve(StockAdjustment $stockAdjustment)
     {
-        $this->authorize('perform-approval', $stockAdjustment);
-        $user = Auth::user();
-        if ($user->jabatan->nama_jabatan !== 'Kepala Gudang' || $user->gudang_id !== $stockAdjustment->gudang_id) {
-            return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
-        }
+        $this->authorize('approve-adjustment', $stockAdjustment);
+
         if ($stockAdjustment->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
 
         DB::beginTransaction();
         try {
-            $inventoryItems = Inventory::where('part_id', $stockAdjustment->part_id)
-                ->where('gudang_id', $stockAdjustment->gudang_id)->get();
-            if ($inventoryItems->isEmpty()) {
-                throw new \Exception('Stok untuk part ini tidak ditemukan di gudang. Lakukan Putaway terlebih dahulu.');
-            }
-            $inventory = $inventoryItems->first();
+            $inventory = null;
 
-            // --- MULAI LOGGING ---
+            // Logika Baru: Bedakan cara mencari inventory berdasarkan tipe adjusment
+            if ($stockAdjustment->tipe === 'KURANG') {
+                // Jika tipe KURANG, kita WAJIB menemukan inventory yang ada. Gagal jika tidak ada.
+                $inventory = Inventory::where('part_id', $stockAdjustment->part_id)
+                    ->where('gudang_id', $stockAdjustment->gudang_id)
+                    ->where('rak_id', $stockAdjustment->rak_id)
+                    ->firstOrFail(); // Gagal jika tidak ketemu, karena tidak mungkin mengurangi stok yang tidak ada.
+            } else { // Tipe TAMBAH
+                // Jika tipe TAMBAH, kita boleh membuat baris inventory baru jika belum ada.
+                $inventory = Inventory::firstOrCreate(
+                    [
+                        'part_id' => $stockAdjustment->part_id,
+                        'gudang_id' => $stockAdjustment->gudang_id,
+                        'rak_id' => $stockAdjustment->rak_id
+                    ],
+                    ['quantity' => 0]
+                );
+            }
+
             $stokSebelum = $inventory->quantity;
             $jumlah = $stockAdjustment->jumlah;
 
@@ -89,29 +105,25 @@ class StockAdjustmentController extends Controller
                 if ($stokSebelum < $jumlah) {
                     throw new \Exception('Stok tidak mencukupi untuk penyesuaian pengurangan.');
                 }
-                $stokSesudah = $stokSebelum - $jumlah;
-                $inventory->quantity = $stokSesudah;
+                $inventory->decrement('quantity', $jumlah);
             } else { // TAMBAH
-                $stokSesudah = $stokSebelum + $jumlah;
-                $inventory->quantity = $stokSesudah;
+                $inventory->increment('quantity', $jumlah);
             }
-            $inventory->save();
 
             \App\Models\StockMovement::create([
                 'part_id' => $stockAdjustment->part_id,
                 'gudang_id' => $stockAdjustment->gudang_id,
-                'tipe_gerakan' => 'ADJUSMENT_' . $stockAdjustment->tipe,
-                'jumlah' => ($stockAdjustment->tipe === 'TAMBAH' ? $jumlah : -$jumlah), // Positif atau negatif
+                'tipe_gerakan' => 'ADJUSTMENT',
+                'jumlah' => ($stockAdjustment->tipe === 'TAMBAH' ? $jumlah : -$jumlah),
                 'stok_sebelum' => $stokSebelum,
-                'stok_sesudah' => $stokSesudah,
+                'stok_sesudah' => $inventory->quantity,
                 'referensi' => 'ADJ-' . $stockAdjustment->id,
                 'keterangan' => $stockAdjustment->alasan,
-                'user_id' => $user->id,
+                'user_id' => Auth::id(),
             ]);
-            // --- AKHIR LOGGING ---
 
             $stockAdjustment->status = 'APPROVED';
-            $stockAdjustment->approved_by = $user->id;
+            $stockAdjustment->approved_by = Auth::id();
             $stockAdjustment->approved_at = now();
             $stockAdjustment->save();
 
@@ -124,21 +136,23 @@ class StockAdjustmentController extends Controller
         }
     }
 
-    public function reject(StockAdjustment $stockAdjustment)
+    public function reject(Request $request, StockAdjustment $stockAdjustment) // Tambahkan Request $request
     {
-        $this->authorize('perform-approval', $stockAdjustment);
-        $user = Auth::user();
-        if ($user->jabatan->nama_jabatan !== 'Kepala Gudang' || $user->gudang_id !== $stockAdjustment->gudang_id) {
-            return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
-        }
+        $this->authorize('approve-adjustment', $stockAdjustment);
+
+        // Validasi bahwa alasan penolakan wajib diisi
+        $request->validate([
+            'rejection_reason' => 'required|string|min:10',
+        ]);
 
         if ($stockAdjustment->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
 
         $stockAdjustment->status = 'REJECTED';
-        $stockAdjustment->approved_by = $user->id;
-        $stockAdjustment->approved_at = now();
+        $stockAdjustment->rejection_reason = $request->rejection_reason; // Simpan alasan penolakan
+        $stockAdjustment->approved_by = Auth::id(); // Catat siapa yang menolak
+        $stockAdjustment->approved_at = now(); // Catat kapan ditolak
         $stockAdjustment->save();
 
         return redirect()->route('admin.stock-adjustments.index')->with('success', 'Permintaan adjusment stok telah ditolak.');

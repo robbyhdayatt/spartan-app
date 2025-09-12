@@ -98,11 +98,9 @@ class StockMutationController extends Controller
 
     public function approve(StockMutation $stockMutation)
     {
+        // Pengecekan hak akses ini sudah benar dan aman
         $this->authorize('approve-mutation', $stockMutation);
-        $user = Auth::user();
-        if ($user->jabatan->nama_jabatan !== 'Kepala Gudang' || $user->gudang_id !== $stockMutation->gudang_asal_id) {
-            return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
-        }
+
         if ($stockMutation->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
@@ -112,15 +110,19 @@ class StockMutationController extends Controller
             // --- PROSES GUDANG ASAL (STOCK OUT) ---
             $sourceInventory = Inventory::where('rak_id', $stockMutation->rak_asal_id)
                 ->where('part_id', $stockMutation->part_id)->firstOrFail();
+
             if ($sourceInventory->quantity < $stockMutation->jumlah) {
-                throw new \Exception('Stok di rak asal tidak mencukupi.');
+                throw new \Exception('Stok di rak asal tidak mencukupi untuk dikirim.');
             }
 
             $stokSebelumAsal = $sourceInventory->quantity;
             $jumlahMutasi = $stockMutation->jumlah;
+
+            // Kurangi stok dari inventaris asal
             $sourceInventory->quantity -= $jumlahMutasi;
             $sourceInventory->save();
 
+            // Catat pergerakan stok keluar
             \App\Models\StockMovement::create([
                 'part_id' => $stockMutation->part_id,
                 'gudang_id' => $stockMutation->gudang_asal_id,
@@ -129,40 +131,23 @@ class StockMutationController extends Controller
                 'stok_sebelum' => $stokSebelumAsal,
                 'stok_sesudah' => $sourceInventory->quantity,
                 'referensi' => $stockMutation->nomor_mutasi,
-                'keterangan' => 'Ke Gudang ' . $stockMutation->gudangTujuan->kode_gudang,
-                'user_id' => $user->id,
+                'keterangan' => 'Pengiriman ke Gudang ' . $stockMutation->gudangTujuan->kode_gudang,
+                'user_id' => Auth::id(),
             ]);
 
-            // --- PROSES GUDANG TUJUAN (STOCK IN) ---
-            $rakTujuanId = Rak::where('gudang_id', $stockMutation->gudang_tujuan_id)->firstOrFail()->id;
-            $destinationInventory = Inventory::firstOrCreate(
-                ['part_id' => $stockMutation->part_id, 'rak_id' => $rakTujuanId],
-                ['gudang_id' => $stockMutation->gudang_tujuan_id, 'quantity' => 0]
-            );
+            // --- HAPUS LOGIKA PENAMBAHAN STOK DI GUDANG TUJUAN ---
+            // Logika ini akan kita pindahkan ke fungsi penerimaan nanti.
 
-            $stokSebelumTujuan = $destinationInventory->quantity;
-            $destinationInventory->quantity += $jumlahMutasi;
-            $destinationInventory->save();
-
-            \App\Models\StockMovement::create([
-                'part_id' => $stockMutation->part_id,
-                'gudang_id' => $stockMutation->gudang_tujuan_id,
-                'tipe_gerakan' => 'MUTASI_MASUK',
-                'jumlah' => $jumlahMutasi, // Positif untuk stok masuk
-                'stok_sebelum' => $stokSebelumTujuan,
-                'stok_sesudah' => $destinationInventory->quantity,
-                'referensi' => $stockMutation->nomor_mutasi,
-                'keterangan' => 'Dari Gudang ' . $stockMutation->gudangAsal->kode_gudang,
-                'user_id' => $user->id,
-            ]);
-
-            $stockMutation->status = 'APPROVED';
-            $stockMutation->approved_by = $user->id;
+            // --- PERBARUI STATUS MUTASI ---
+            $stockMutation->status = 'IN_TRANSIT'; // Status baru: Dalam Perjalanan
+            $stockMutation->approved_by = Auth::id();
             $stockMutation->approved_at = now();
             $stockMutation->save();
 
             DB::commit();
-            return redirect()->route('admin.stock-mutations.index')->with('success', 'Mutasi stok disetujui.');
+
+            // Berikan pesan sukses yang baru
+            return redirect()->route('admin.stock-mutations.index')->with('success', 'Mutasi stok disetujui dan barang dalam perjalanan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -170,25 +155,27 @@ class StockMutationController extends Controller
         }
     }
 
-    public function reject(StockMutation $stockMutation)
-    {
-        $this->authorize('approve-mutation', $stockMutation);
-        $user = Auth::user();
-        if ($user->jabatan->nama_jabatan !== 'Kepala Gudang' || $user->gudang_id !== $stockMutation->gudang_asal_id) {
-            return back()->with('error', 'Anda tidak memiliki wewenang untuk aksi ini.');
-        }
+public function reject(Request $request, StockMutation $stockMutation) // Tambahkan Request $request
+{
+    $this->authorize('approve-mutation', $stockMutation);
 
-        if ($stockMutation->status !== 'PENDING_APPROVAL') {
-            return back()->with('error', 'Permintaan ini sudah diproses.');
-        }
+    // Validasi bahwa alasan penolakan wajib diisi
+    $request->validate([
+        'rejection_reason' => 'required|string|min:10',
+    ]);
 
-        $stockMutation->status = 'REJECTED';
-        $stockMutation->approved_by = $user->id;
-        $stockMutation->approved_at = now();
-        $stockMutation->save();
-
-        return redirect()->route('admin.stock-mutations.index')->with('success', 'Permintaan mutasi stok telah ditolak.');
+    if ($stockMutation->status !== 'PENDING_APPROVAL') {
+        return back()->with('error', 'Permintaan ini sudah diproses.');
     }
+
+    $stockMutation->status = 'REJECTED';
+    $stockMutation->rejection_reason = $request->rejection_reason; // Simpan alasan penolakan
+    $stockMutation->approved_by = Auth::id(); // Catat siapa yang menolak
+    $stockMutation->approved_at = now(); // Catat kapan ditolak
+    $stockMutation->save();
+
+    return redirect()->route('admin.stock-mutations.index')->with('success', 'Permintaan mutasi stok telah ditolak.');
+}
 
     private function generateMutationNumber()
     {

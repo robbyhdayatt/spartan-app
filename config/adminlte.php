@@ -363,6 +363,12 @@ return [
             'can' => 'can-receive'
         ],
         [
+            'text' => 'Penerimaan Mutasi',
+            'route'  => 'admin.mutation-receiving.index',
+            'icon' => 'fas fa-fw fa-people-carry',
+            'can' => 'can-receive-mutation'
+        ],
+        [
             'text' => 'Quality Control (QC)',
             'route'  => 'admin.qc.index',
             'icon' => 'fas fa-fw fa-check-circle',
@@ -378,13 +384,13 @@ return [
             'text' => 'Adjusment Stok',
             'route'  => 'admin.stock-adjustments.index',
             'icon' => 'fas fa-fw fa-exchange-alt',
-            'can' => 'can-manage-stock'
+            'can' => 'view-stock-management'
         ],
         [
             'text' => 'Mutasi Gudang',
             'route'  => 'admin.stock-mutations.index',
             'icon' => 'fas fa-fw fa-truck-loading',
-            'can' => 'can-manage-stock'
+            'can' => 'view-stock-management'
         ],
         [
             'text' => 'Stok Karantina',
@@ -402,18 +408,19 @@ return [
         // Laporan Section
         [
             'header' => 'LAPORAN',
-            'can' => ['is-manager', 'is-kepala-gudang'], // Hanya Manajer & Kepala Gudang
+            'can' => 'view-reports', // Hanya Manajer & Kepala Gudang
         ],
-        ['text' => 'Kartu Stok', 'route'  => 'admin.reports.stock-card', 'icon' => 'fas fa-fw fa-file-alt', 'can' => ['is-manager', 'is-kepala-gudang']],
-        ['text' => 'Stok per Gudang', 'route'  => 'admin.reports.stock-by-warehouse', 'icon' => 'fas fa-fw fa-boxes', 'can' => ['is-manager', 'is-kepala-gudang']],
-        ['text' => 'Jurnal Penjualan', 'route'  => 'admin.reports.sales-journal', 'icon' => 'fas fa-fw fa-book', 'can' => ['is-manager', 'is-kepala-gudang']],
-        ['text' => 'Jurnal Pembelian', 'route'  => 'admin.reports.purchase-journal', 'icon' => 'fas fa-fw fa-book-open', 'can' => ['is-manager', 'is-kepala-gudang']],
-        ['text' => 'Nilai Persediaan', 'route'  => 'admin.reports.inventory-value', 'icon' => 'fas fa-fw fa-dollar-sign', 'can' => ['is-manager', 'is-kepala-gudang']],
-        ['text' => 'Analisis Penjualan', 'route'  => 'admin.reports.sales-purchase-analysis', 'icon' => 'fas fa-fw fa-chart-line', 'can' => ['is-manager', 'is-kepala-gudang']],
+        ['text' => 'Kartu Stok', 'route'  => 'admin.reports.stock-card', 'icon' => 'fas fa-fw fa-file-alt', 'can' => 'view-reports'],
+        ['text' => 'Stok per Gudang', 'route'  => 'admin.reports.stock-by-warehouse', 'icon' => 'fas fa-fw fa-boxes', 'can' => 'view-reports'],
+        ['text' => 'Jurnal Penjualan', 'route'  => 'admin.reports.sales-journal', 'icon' => 'fas fa-fw fa-book', 'can' => 'view-reports'],
+        ['text' => 'Jurnal Pembelian', 'route'  => 'admin.reports.purchase-journal', 'icon' => 'fas fa-fw fa-book-open', 'can' => 'view-reports'],
+        ['text' => 'Nilai Persediaan', 'route'  => 'admin.reports.inventory-value', 'icon' => 'fas fa-fw fa-dollar-sign', 'can' => 'view-reports'],
+        ['text' => 'Analisis Penjualan', 'route'  => 'admin.reports.sales-purchase-analysis', 'icon' => 'fas fa-fw fa-chart-line', 'can' => 'view-reports'],
         [
             'text' => 'Laporan Stok Keseluruhan',
             'route'  => 'admin.reports.stock-report',
             'icon' => 'fas fa-fw fa-boxes',
+            'can' => 'view-reports'
         ],
 
         // Pengguna & Penjualan Section

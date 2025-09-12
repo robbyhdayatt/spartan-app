@@ -9,6 +9,7 @@ use App\Models\PenjualanDetail;
 use App\Models\Inventory;
 use App\Models\Rak;
 use Illuminate\Http\Request;
+use App\Models\StockMovement;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -47,20 +48,16 @@ class SalesReturnController extends Controller
             return redirect()->back()->with('error', 'Tidak ada item yang dipilih untuk diretur.');
         }
 
-        // --- LOGIKA BARU YANG LEBIH SPESIFIK ---
-        // Cari rak karantina yang tipenya KARANTINA dan namanya 'Rak Karantina Retur'
-        $rakKarantina = Rak::where('gudang_id', $penjualan->gudang_id)
-                        ->where('tipe_rak', 'KARANTINA')
-                        ->where('nama_rak', 'Rak Karantina Retur') // Cari berdasarkan nama spesifik
-                        ->first();
-
-        if (!$rakKarantina) {
-            return redirect()->back()->with('error', 'Rak dengan nama "Rak Karantina Retur" dan tipe "KARANTINA" tidak ditemukan di gudang ini. Hubungi administrator.');
-        }
-        // --- AKHIR LOGIKA BARU ---
-
         DB::beginTransaction();
         try {
+            // --- LOGIKA BARU YANG LEBIH TANGGUH ---
+            // Cari atau buat rak karantina di gudang yang sama
+            $rakKarantina = Rak::firstOrCreate(
+                ['gudang_id' => $penjualan->gudang_id, 'tipe_rak' => 'KARANTINA'],
+                ['nama_rak' => 'RAK KARANTINA', 'kode_rak' => 'KARANTINA-'.$penjualan->gudang->kode_gudang]
+            );
+            // --- AKHIR LOGIKA BARU ---
+
             $salesReturn = SalesReturn::create([
                 'nomor_retur_jual' => SalesReturn::generateReturnNumber(),
                 'penjualan_id' => $penjualan->id,
@@ -69,7 +66,7 @@ class SalesReturnController extends Controller
                 'tanggal_retur' => $request->tanggal_retur,
                 'catatan' => $request->catatan,
                 'created_by' => auth()->id(),
-                'total_retur' => 0,
+                'total_retur' => 0, // Akan di-update nanti
             ]);
 
             $subtotalRetur = 0;
@@ -93,20 +90,33 @@ class SalesReturnController extends Controller
                     'subtotal' => $itemSubtotal,
                 ]);
 
+                // Update jumlah yang sudah diretur pada detail penjualan asli
                 $penjualanDetail->increment('qty_diretur', $qtyRetur);
 
+                // Tambahkan stok ke rak karantina
                 $inventory = Inventory::firstOrCreate(
                     ['part_id' => $penjualanDetail->part_id, 'rak_id' => $rakKarantina->id],
                     ['gudang_id' => $penjualan->gudang_id, 'quantity' => 0]
                 );
+
+                $stokSebelum = $inventory->quantity;
                 $inventory->increment('quantity', $qtyRetur);
+
+                // --- TAMBAHKAN PENCATATAN STOCK MOVEMENT ---
+                StockMovement::create([
+                    'part_id'       => $penjualanDetail->part_id,
+                    'gudang_id'     => $penjualan->gudang_id,
+                    'tipe_gerakan'  => 'RETUR_JUAL',
+                    'jumlah'        => $qtyRetur, // Positif karena stok masuk
+                    'stok_sebelum'  => $stokSebelum,
+                    'stok_sesudah'  => $inventory->quantity,
+                    'referensi'     => $salesReturn->nomor_retur_jual,
+                    'user_id'       => auth()->id(),
+                ]);
             }
 
-            $taxRate = 0;
-            if ($penjualan->subtotal > 0 && $penjualan->pajak > 0) {
-                $taxRate = $penjualan->pajak / $penjualan->subtotal;
-            }
-
+            // Hitung ulang total retur
+            $taxRate = ($penjualan->subtotal > 0 && $penjualan->pajak > 0) ? ($penjualan->pajak / $penjualan->subtotal) : 0;
             $pajakRetur = $subtotalRetur * $taxRate;
             $totalRetur = $subtotalRetur + $pajakRetur;
 

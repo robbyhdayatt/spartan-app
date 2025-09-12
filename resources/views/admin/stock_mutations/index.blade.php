@@ -11,7 +11,9 @@
     <div class="card-header">
         <h3 class="card-title">Daftar Permintaan Mutasi</h3>
         <div class="card-tools">
+            @can('can-manage-stock')
             <a href="{{ route('admin.stock-mutations.create') }}" class="btn btn-primary btn-sm">Buat Permintaan Mutasi</a>
+            @endcan
         </div>
     </div>
     <div class="card-body">

@@ -20,20 +20,30 @@
                     </ul>
                 </div>
             @endif
-            <div class="form-group">
-                <label>Gudang</label>
-                @if(count($gudangs) === 1)
-                    <input type="text" class="form-control" value="{{ $gudangs->first()->nama_gudang }}" readonly>
-                    <input type="hidden" name="gudang_id" value="{{ $gudangs->first()->id }}">
-                @else
-                    <select name="gudang_id" class="form-control" required>
-                        <option value="" disabled selected>Pilih Gudang</option>
-                        @foreach($gudangs as $gudang)
-                            <option value="{{ $gudang->id }}">{{ $gudang->nama_gudang }}</option>
-                        @endforeach
+            <div class="row">
+                <div class="col-md-6 form-group">
+                    <label>Gudang</label>
+                    @if(count($gudangs) === 1)
+                        <input type="text" class="form-control" value="{{ $gudangs->first()->nama_gudang }}" readonly>
+                        <input type="hidden" id="gudang_id" name="gudang_id" value="{{ $gudangs->first()->id }}">
+                    @else
+                        <select name="gudang_id" id="gudang_id" class="form-control" required>
+                            <option value="" disabled selected>Pilih Gudang</option>
+                            @foreach($gudangs as $gudang)
+                                <option value="{{ $gudang->id }}">{{ $gudang->nama_gudang }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+                </div>
+
+                <div class="col-md-6 form-group">
+                    <label>Rak</label>
+                    <select name="rak_id" id="rak_id" class="form-control" required>
+                        <option value="">-- Pilih Gudang Terlebih Dahulu --</option>
                     </select>
-                @endif
+                </div>
             </div>
+
             <div class="form-group">
                 <label>Part</label>
                 <select name="part_id" class="form-control" required>
@@ -67,4 +77,38 @@
         </div>
     </form>
 </div>
+@stop
+
+@section('js')
+<script>
+$(document).ready(function() {
+    function fetchRaks(gudangId) {
+        if (gudangId) {
+            $.ajax({
+                url: `/spartan/admin/api/gudangs/${gudangId}/raks`, // Sesuaikan URL jika perlu
+                type: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    $('#rak_id').empty().append('<option value="">-- Pilih Rak --</option>');
+                    $.each(data, function(key, value) {
+                        $('#rak_id').append('<option value="' + value.id + '">' + value.nama_rak + '</option>');
+                    });
+                }
+            });
+        } else {
+            $('#rak_id').empty().append('<option value="">-- Pilih Gudang Terlebih Dahulu --</option>');
+        }
+    }
+
+    // Event listener untuk dropdown gudang
+    $('#gudang_id').on('change', function() {
+        fetchRaks($(this).val());
+    });
+
+    // Panggil saat halaman dimuat jika gudang sudah terpilih (untuk user non-admin)
+    if ($('#gudang_id').val()) {
+        fetchRaks($('#gudang_id').val());
+    }
+});
+</script>
 @stop

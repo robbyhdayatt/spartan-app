@@ -8,11 +8,12 @@
 
 @section('content')
 <div class="invoice p-3 mb-3">
+    {{-- Baris Info Utama --}}
     <div class="row">
         <div class="col-12">
             <h4>
                 <i class="fas fa-globe"></i> SpartanApp
-                <small class="float-right">Tanggal: {{ \Carbon\Carbon::parse($purchaseOrder->tanggal_po)->format('d/m/Y') }}</small>
+                <small class="float-right">Tanggal: {{ $purchaseOrder->tanggal_po->format('d/m/Y') }}</small>
             </h4>
         </div>
     </div>
@@ -20,11 +21,9 @@
         <div class="col-sm-4 invoice-col">
             Dari
             <address>
-                {{-- GANTI DENGAN INFO PERUSAHAAN ANDA --}}
                 <strong>PT. Lautan Teduh Interniaga</strong><br>
-                Jl. Ikan Tenggiri, Pesawahan, Kec. Telukbetung Selatan<br>
+                Jl. Ikan Tenggiri, Pesawahan<br>
                 Bandar Lampung, Indonesia<br>
-                Phone: 0812-2000-4367<br>
                 Website: www.yamaha-lampung.com
             </address>
         </div>
@@ -41,10 +40,23 @@
             <b>Nomor PO:</b> {{ $purchaseOrder->nomor_po }}<br>
             <b>Tujuan Gudang:</b> {{ $purchaseOrder->gudang->nama_gudang }}<br>
             <b>Status:</b> <span class="badge {{ $purchaseOrder->status_class }}">{{ $purchaseOrder->status_badge }}</span><br>
-            {{-- PERBAIKAN FINAL DI SINI --}}
             <b>Dibuat Oleh:</b> {{ $purchaseOrder->createdBy->nama ?? 'Tidak Ditemukan' }}
         </div>
     </div>
+
+    {{-- Tampilkan Alasan Penolakan JIKA ADA --}}
+    @if($purchaseOrder->status === 'REJECTED' && $purchaseOrder->rejection_reason)
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="alert alert-danger">
+                <h5><i class="icon fas fa-ban"></i> Alasan Penolakan</h5>
+                {{ $purchaseOrder->rejection_reason }}
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- Tabel Item --}}
     <div class="row">
         <div class="col-12 table-responsive">
             <table class="table table-striped">
@@ -71,16 +83,17 @@
             </table>
         </div>
     </div>
+
+    {{-- Baris Total dan Catatan --}}
     <div class="row">
         <div class="col-6">
-            <p class="lead">Catatan:</p>
+            <p class="lead">Catatan Pembuat PO:</p>
             <p class="text-muted well well-sm shadow-none" style="margin-top: 10px;">
                 {{ $purchaseOrder->catatan ?? 'Tidak ada catatan.' }}
             </p>
         </div>
         <div class="col-6">
             <p class="lead">Detail Pembayaran</p>
-
             <div class="table-responsive">
                 <table class="table">
                     <tr>
@@ -99,24 +112,51 @@
             </div>
         </div>
     </div>
+
+    {{-- Baris Tombol Aksi --}}
     <div class="row no-print">
         <div class="col-12">
             @if($purchaseOrder->status === 'PENDING_APPROVAL')
-                 @can('approve-po', $purchaseOrder)
+                @can('approve-po', $purchaseOrder)
                 <form action="{{ route('admin.purchase-orders.approve', $purchaseOrder) }}" method="POST" class="d-inline">
                     @csrf
                     <button type="submit" class="btn btn-success float-right"><i class="far fa-credit-card"></i> Setujui</button>
                 </form>
-                <form action="{{ route('admin.purchase-orders.reject', $purchaseOrder) }}" method="POST" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-danger float-right" style="margin-right: 5px;">
-                        <i class="fas fa-times"></i> Tolak
-                    </button>
-                </form>
-                 @endcan
+                {{-- TOMBOL TOLAK BARU YANG MEMBUKA MODAL --}}
+                <button type="button" class="btn btn-danger float-right" style="margin-right: 5px;" data-toggle="modal" data-target="#rejectModal">
+                    <i class="fas fa-times"></i> Tolak
+                </button>
+                @endcan
             @endif
-             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary">Kembali</a>
+             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
         </div>
     </div>
+</div>
+
+{{-- MODAL UNTUK ALASAN PENOLAKAN --}}
+<div class="modal fade" id="rejectModal" tabindex="-1" role="dialog" aria-labelledby="rejectModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form action="{{ route('admin.purchase-orders.reject', $purchaseOrder) }}" method="POST">
+        @csrf
+        <div class="modal-header">
+          <h5 class="modal-title" id="rejectModalLabel">Alasan Penolakan PO</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="rejection_reason">Mohon berikan alasan mengapa PO ini ditolak:</label>
+            <textarea class="form-control" id="rejection_reason" name="rejection_reason" rows="3" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-danger">Submit Penolakan</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 @stop
