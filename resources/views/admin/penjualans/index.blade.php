@@ -8,7 +8,9 @@
     <div class="card-header">
         <h3 class="card-title">Transaksi Penjualan</h3>
         <div class="card-tools">
+            @can('manage-sales')
             <a href="{{ route('admin.penjualans.create') }}" class="btn btn-primary btn-sm">Buat Penjualan Baru</a>
+            @endcan
         </div>
     </div>
     <div class="card-body">

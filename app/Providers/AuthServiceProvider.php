@@ -92,8 +92,8 @@ class AuthServiceProvider extends ServiceProvider
         // Izin untuk proses inbound (penerimaan barang)
         Gate::define('can-receive', fn(User $user) => in_array($user->jabatan->singkatan, ['PJG', 'SR']));
         Gate::define('can-receive-mutation', fn(User $user) => in_array($user->jabatan->singkatan, ['PJG', 'SR']));
-        Gate::define('can-qc', fn(User $user) => in_array($user->jabatan->singkatan, ['PJG', 'QC']));
-        Gate::define('can-putaway', fn(User $user) => in_array($user->jabatan->singkatan, ['PJG', 'SP']));
+        Gate::define('can-qc', fn(User $user) => $user->jabatan->singkatan === 'QC');
+        Gate::define('can-putaway', fn(User $user) => $user->jabatan->singkatan ==='SP');
 
         // Izin untuk mengelola stok internal
         Gate::define('can-manage-stock', function(User $user) {
@@ -110,7 +110,7 @@ class AuthServiceProvider extends ServiceProvider
 
         // Izin untuk retur
         Gate::define('manage-purchase-returns', fn(User $user) => in_array($user->jabatan->singkatan, ['PJG', 'SSC']));
-        Gate::define('manage-sales-returns', fn(User $user) => in_array($user->jabatan->singkatan, ['MA', 'SLS']));
+        Gate::define('manage-sales-returns', fn(User $user) => in_array($user->jabatan->singkatan, ['SLS']));
 
         Gate::define('approve-mutation', function (User $user, StockMutation $stockMutation) {
             return $user->jabatan->singkatan === 'KG' && $user->gudang_id === $stockMutation->gudang_asal_id;
@@ -119,5 +119,37 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('view-reports', function(User $user) {
             return in_array($user->jabatan->singkatan, ['MA', 'KG', 'PJG']);
         });
+
+        Gate::define('view-sales', function(User $user) {
+            return in_array($user->jabatan->singkatan, ['MA', 'SLS']);
+        });
+
+        Gate::define('manage-sales', function(User $user) {
+            return in_array($user->jabatan->singkatan, ['SLS']);
+        });
+
+        Gate::define('view-sales-returns', function(User $user) {
+            return in_array($user->jabatan->singkatan, ['MA', 'SLS']);
+        });
+
+        // GATE BARU UNTUK GRUP MENU
+        Gate::define('access-master-data', function(User $user) {
+            // Hanya Super Admin dan Manajer Area yang bisa melihat master data
+            return in_array($user->jabatan->singkatan, ['SA', 'MA', 'KG', 'PJG', 'SLS']);
+        });
+
+        Gate::define('access-gudang-transaksi', function(User $user) {
+            // Semua peran gudang bisa mengakses menu ini
+            return in_array($user->jabatan->singkatan, ['KG', 'PJG', 'SR', 'QC', 'SP', 'SSC']);
+        });
+
+        Gate::define('access-penjualan-pelanggan', function(User $user) {
+            return in_array($user->jabatan->singkatan, ['MA', 'SLS', 'SA']);
+        });
+
+        Gate::define('access-marketing', function(User $user) {
+            return in_array($user->jabatan->singkatan, ['MA']);
+        });
+
     }
 }

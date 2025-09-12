@@ -5,7 +5,10 @@
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">Daftar Retur dari Konsumen</h3>
-        <div class="card-tools"><a href="{{ route('admin.sales-returns.create') }}" class="btn btn-primary btn-sm">Buat Retur Baru</a></div>
+        @can('manage-sales-returns')
+        <div class="card-tools">
+            <a href="{{ route('admin.sales-returns.create') }}" class="btn btn-primary btn-sm">Buat Retur Baru</a></div>
+        @endcan
     </div>
     <div class="card-body">
         <table id="sales_returns-table" class="table table-bordered">

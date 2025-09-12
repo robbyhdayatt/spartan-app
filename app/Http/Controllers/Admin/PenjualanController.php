@@ -19,12 +19,16 @@ class PenjualanController extends Controller
 {
     public function index()
     {
+        $this->authorize('view-sales');
+
         $penjualans = Penjualan::with(['konsumen', 'sales'])->latest()->get();
         return view('admin.penjualans.index', compact('penjualans'));
     }
 
     public function create()
     {
+        $this->authorize('manage-sales');
+
         $user = Auth::user();
         $konsumens = Konsumen::where('is_active', true)->orderBy('nama_konsumen')->get();
 
@@ -128,6 +132,8 @@ class PenjualanController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('manage-sales');
+
         $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
             'konsumen_id' => 'required|exists:konsumens,id',
@@ -207,6 +213,8 @@ class PenjualanController extends Controller
 
     public function show(Penjualan $penjualan)
     {
+        $this->authorize('view-sales');
+
         $penjualan->load(['konsumen', 'gudang', 'sales', 'details.part', 'details.rak']);
         return view('admin.penjualans.show', compact('penjualan'));
     }

@@ -7,74 +7,67 @@
 @stop
 
 @section('content')
-    <div class="card">
-        <div class="card-header">
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Data Purchase Order</h3>
+        <div class="card-tools">
             @can('create-po')
-            <a href="{{ route('admin.purchase-orders.create') }}" class="btn btn-primary">Buat PO Baru</a>
+            <a href="{{ route('admin.purchase-orders.create') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Buat PO Baru</a>
             @endcan
         </div>
-        <div class="card-body">
-            <table id="example1" class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Nomor PO</th>
-                        <th>Tanggal</th>
-                        <th>Supplier</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Dibuat Oleh</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($purchaseOrders as $po)
-                    <tr>
-                        <td>{{ $po->nomor_po }}</td>
-                        <td>{{ \Carbon\Carbon::parse($po->tanggal_po)->format('d-m-Y') }}</td>
-                        <td>{{ $po->supplier->nama_supplier }}</td>
-                        <td>{{ 'Rp ' . number_format($po->total_amount, 0, ',', '.') }}</td>
-                        <td><span class="badge {{ $po->status_class }}">{{ $po->status_badge }}</span></td>
-                        <td>{{ $po->createdBy->nama ?? 'N/A' }}</td>
-                        <td>
-                            <a href="{{ route('admin.purchase-orders.show', $po) }}" class="btn btn-info btn-sm">Detail</a>
-                            {{-- TOMBOL HAPUS DAN FORM-NYA SUDAH DIHILANGKAN --}}
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
     </div>
+    <div class="card-body">
+        <table id="po-table" class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Nomor PO</th>
+                    <th>Supplier</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-center">Status</th>
+                    <th>Dibuat Oleh</th>
+                    <th class="text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($purchaseOrders as $po)
+                <tr>
+                    <td>
+                        <strong>{{ $po->nomor_po }}</strong><br>
+                        <small class="text-muted">{{ $po->tanggal_po->format('d M Y') }}</small>
+                    </td>
+                    <td>{{ $po->supplier->nama_supplier }}</td>
+                    <td class="text-right">{{ 'Rp ' . number_format($po->total_amount, 0, ',', '.') }}</td>
+                    <td class="text-center">
+                        <span class="badge {{ $po->status_class }}">{{ $po->status_badge }}</span>
+                    </td>
+                    <td>
+                        {{ $po->createdBy->nama ?? 'N/A' }}<br>
+                        <small class="text-muted">{{ $po->createdBy->jabatan->nama_jabatan ?? '' }}</small>
+                    </td>
+                    <td class="text-center">
+                        <a href="{{ route('admin.purchase-orders.show', $po) }}" class="btn btn-info btn-xs">
+                            <i class="fas fa-eye"></i> Detail
+                        </a>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+</div>
 @stop
 
+{{-- Tambahkan inisialisasi DataTables di sini --}}
 @section('js')
     <script>
-    $(function () {
-        $("#example1").DataTable({
-            "responsive": true, "lengthChange": false, "autoWidth": false,
-            "buttons": ["copy", "csv", "excel", "pdf", "print", "colvis"]
-        }).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
-    });
-    </script>
-    @if(session('success'))
-        <script>
-            Swal.fire({
-                icon: 'success',
-                title: 'Berhasil!',
-                text: '{{ session('success') }}',
-                showConfirmButton: false,
-                timer: 2000
-            });
-        </script>
-    @endif
-    @if(session('error'))
-    <script>
-        Swal.fire({
-            icon: 'error',
-            title: 'Gagal!',
-            text: '{{ session('error') }}',
-            showConfirmButton: true
+        $(function () {
+            $("#po-table").DataTable({
+                "responsive": true,
+                "lengthChange": false,
+                "autoWidth": false,
+                "order": [[0, "desc"]], // Urutkan berdasarkan kolom pertama (Nomor PO) secara menurun
+                "buttons": ["copy", "csv", "excel", "pdf", "print"]
+            }).buttons().container().appendTo('#po-table_wrapper .col-md-6:eq(0)');
         });
     </script>
-@endif
 @stop

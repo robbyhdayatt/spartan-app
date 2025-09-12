@@ -17,7 +17,7 @@ class SalesReturnController extends Controller
 {
     public function index()
     {
-        $this->authorize('manage-sales-returns');
+        $this->authorize('view-sales-returns'); // <-- KODE YANG BENAR
         $returns = SalesReturn::with(['konsumen', 'penjualan'])->latest()->get();
         return view('admin.sales_returns.index', compact('returns'));
     }

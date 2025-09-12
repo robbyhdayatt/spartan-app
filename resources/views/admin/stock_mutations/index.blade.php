@@ -12,48 +12,65 @@
         <h3 class="card-title">Daftar Permintaan Mutasi</h3>
         <div class="card-tools">
             @can('can-manage-stock')
-            <a href="{{ route('admin.stock-mutations.create') }}" class="btn btn-primary btn-sm">Buat Permintaan Mutasi</a>
+            <a href="{{ route('admin.stock-mutations.create') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Buat Mutasi Baru</a>
             @endcan
         </div>
     </div>
     <div class="card-body">
-         @if(session('error'))
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                {{ session('error') }}
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-            </div>
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
         @endif
-        <table id="stock_mutations-table" class="table table-bordered">
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+        <table id="mutation-table" class="table table-bordered table-striped">
             <thead>
                 <tr>
-                    <th>No. Mutasi</th>
+                    <th>Nomor Mutasi</th>
                     <th>Part</th>
-                    <th>Asal -> Tujuan</th>
-                    <th>Jumlah</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
+                    <th class="text-center">Jumlah</th>
+                    <th>Gudang Asal & Tujuan</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($mutations as $mutation)
+                @foreach($mutations as $mutation)
                 <tr>
-                    <td>{{ $mutation->nomor_mutasi }}</td>
-                    <td>{{ $mutation->part->nama_part }}</td>
-                    <td>{{ $mutation->gudangAsal->nama_gudang }} -> {{ $mutation->gudangTujuan->nama_gudang }}</td>
-                    <td>{{ $mutation->jumlah }}</td>
-                    <td>{{ $mutation->status }}</td>
-                        <td>
-                            <a href="{{ route('admin.stock-mutations.show', $mutation) }}" class="btn btn-info btn-sm">
-                                Detail
-                            </a>
-                        </td>
+                    <td>
+                        <strong>{{ $mutation->nomor_mutasi }}</strong><br>
+                        <small class="text-muted">{{ $mutation->created_at->format('d M Y') }}</small>
+                    </td>
+                    <td>
+                        {{ $mutation->part->nama_part }}
+                        <br>
+                        <small class="text-muted">{{ $mutation->part->kode_part }}</small>
+                    </td>
+                    <td class="text-center">{{ $mutation->jumlah }}</td>
+                    <td>
+                        <i class="fas fa-arrow-up text-danger"></i> {{ $mutation->gudangAsal->nama_gudang }}<br>
+                        <i class="fas fa-arrow-down text-success"></i> {{ $mutation->gudangTujuan->nama_gudang }}
+                    </td>
+                    <td class="text-center">
+                        @if($mutation->status == 'PENDING_APPROVAL')
+                            <span class="badge badge-warning">Menunggu Persetujuan</span>
+                        @elseif($mutation->status == 'IN_TRANSIT')
+                            <span class="badge badge-info">Dalam Perjalanan</span>
+                        @elseif($mutation->status == 'COMPLETED')
+                            <span class="badge badge-success">Selesai</span>
+                        @elseif($mutation->status == 'REJECTED')
+                            <span class="badge badge-danger">Ditolak</span>
+                        @else
+                            <span class="badge badge-secondary">{{ $mutation->status }}</span>
+                        @endif
+                    </td>
+                    <td class="text-center">
+                        <a href="{{ route('admin.stock-mutations.show', $mutation) }}" class="btn btn-info btn-xs">
+                            <i class="fas fa-eye"></i> Detail
+                        </a>
                     </td>
                 </tr>
-                @empty
-                <tr>
-                    <td colspan="6" class="text-center">Belum ada permintaan mutasi.</td>
-                </tr>
-                @endforelse
+                @endforeach
             </tbody>
         </table>
     </div>
@@ -61,11 +78,15 @@
 @stop
 
 @section('js')
-<script>
-    $(document).ready(function() {
-        $('#stock_mutations-table').DataTable({
-            "responsive": true,
+    <script>
+        $(function () {
+            $("#mutation-table").DataTable({
+                "responsive": true,
+                "lengthChange": false,
+                "autoWidth": false,
+                "order": [[0, "desc"]],
+                "buttons": ["copy", "csv", "excel", "pdf", "print"]
+            }).buttons().container().appendTo('#mutation-table_wrapper .col-md-6:eq(0)');
         });
-    });
-</script>
+    </script>
 @stop

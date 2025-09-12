@@ -75,7 +75,7 @@
                     </table>
                 </div>
                 <button type="button" class="btn btn-success btn-sm" id="add-item-btn">+ Tambah Item</button>
-                
+
                 {{-- Total Kalkulasi dan PPN (Struktur disamakan dengan Penjualan) --}}
                 <div class="row justify-content-end mt-4">
                     <div class="col-md-5">
@@ -135,6 +135,23 @@
     </template>
 @stop
 
+@push('css')
+<style>
+    /* Menyesuaikan tinggi Select2 agar sama dengan input form lainnya */
+    .select2-container .select2-selection--single {
+        height: calc(2.25rem + 2px) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5 !important;
+        padding-left: .75rem !important;
+        padding-top: .375rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px) !important;
+    }
+</style>
+@endpush
+
 @section('js')
     <script>
         $(document).ready(function() {
@@ -157,7 +174,7 @@
                 }
 
                 const grandTotal = subtotalTotal + ppnAmount;
-                
+
                 const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
 
                 // Update display
@@ -199,11 +216,11 @@
                     currentDropdown.find('option').each(function() {
                         let option = $(this);
                         let optionValue = option.val();
-                        
+
                         if(optionValue) {
                            option.prop('disabled', false);
                         }
-                        
+
                         if (selectedParts.includes(optionValue) && optionValue !== currentValue) {
                            option.prop('disabled', true);
                         }
