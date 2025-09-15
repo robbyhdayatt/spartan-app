@@ -7,7 +7,7 @@ use App\Models\StockAdjustment;
 use App\Models\Inventory;
 use App\Models\Part;
 use App\Models\Gudang;
-use App\Models\Rak;
+use App\Models\Rak; // <-- TAMBAHKAN ATAU PASTIKAN BARIS INI ADA
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,47 +16,50 @@ class StockAdjustmentController extends Controller
 {
     public function index()
     {
-        $adjustments = StockAdjustment::with(['part', 'gudang', 'createdBy', 'approvedBy'])->latest()->get();
+        $adjustments = StockAdjustment::with(['part', 'gudang', 'rak', 'createdBy', 'approvedBy'])->latest()->get();
         return view('admin.stock_adjustments.index', compact('adjustments'));
     }
 
     public function create()
     {
-
         $user = auth()->user();
         $parts = \App\Models\Part::where('is_active', true)->get();
 
-        // Cek peran pengguna untuk menentukan pilihan gudang
         if ($user->gudang_id) {
-            // Jika user terikat pada gudang, hanya tampilkan gudangnya
             $gudangs = \App\Models\Gudang::where('id', $user->gudang_id)->get();
         } else {
-            // Jika Super Admin, tampilkan semua gudang
             $gudangs = \App\Models\Gudang::where('is_active', true)->get();
         }
 
         return view('admin.stock_adjustments.create', compact('gudangs', 'parts'));
     }
 
+    // Fungsi API untuk mengambil data rak
+    public function getRaksByGudang(Gudang $gudang)
+    {
+        $raks = Rak::where('gudang_id', $gudang->id)
+                   ->whereIn('tipe_rak', ['PENYIMPANAN', 'KARANTINA'])
+                   ->where('is_active', true)
+                   ->get();
+        return response()->json($raks);
+    }
+
     public function store(Request $request)
     {
         $this->authorize('can-manage-stock');
-
-        // 1. Tambahkan rak_id ke dalam validasi
         $validated = $request->validate([
             'part_id' => 'required|exists:parts,id',
             'gudang_id' => 'required|exists:gudangs,id',
-            'rak_id' => 'required|exists:raks,id', // Validasi baru
+            'rak_id' => 'required|exists:raks,id',
             'tipe' => 'required|in:TAMBAH,KURANG',
             'jumlah' => 'required|integer|min:1',
             'alasan' => 'required|string',
         ]);
 
-        // 2. Tambahkan rak_id saat membuat data baru
         StockAdjustment::create([
             'part_id' => $validated['part_id'],
             'gudang_id' => $validated['gudang_id'],
-            'rak_id' => $validated['rak_id'], // Data baru yang disimpan
+            'rak_id' => $validated['rak_id'],
             'tipe' => $validated['tipe'],
             'jumlah' => $validated['jumlah'],
             'alasan' => $validated['alasan'],
@@ -79,15 +82,12 @@ class StockAdjustmentController extends Controller
         try {
             $inventory = null;
 
-            // Logika Baru: Bedakan cara mencari inventory berdasarkan tipe adjusment
             if ($stockAdjustment->tipe === 'KURANG') {
-                // Jika tipe KURANG, kita WAJIB menemukan inventory yang ada. Gagal jika tidak ada.
                 $inventory = Inventory::where('part_id', $stockAdjustment->part_id)
                     ->where('gudang_id', $stockAdjustment->gudang_id)
                     ->where('rak_id', $stockAdjustment->rak_id)
-                    ->firstOrFail(); // Gagal jika tidak ketemu, karena tidak mungkin mengurangi stok yang tidak ada.
-            } else { // Tipe TAMBAH
-                // Jika tipe TAMBAH, kita boleh membuat baris inventory baru jika belum ada.
+                    ->firstOrFail();
+            } else { // TAMBAH
                 $inventory = Inventory::firstOrCreate(
                     [
                         'part_id' => $stockAdjustment->part_id,
@@ -136,23 +136,19 @@ class StockAdjustmentController extends Controller
         }
     }
 
-    public function reject(Request $request, StockAdjustment $stockAdjustment) // Tambahkan Request $request
+    public function reject(Request $request, StockAdjustment $stockAdjustment)
     {
         $this->authorize('approve-adjustment', $stockAdjustment);
-
-        // Validasi bahwa alasan penolakan wajib diisi
-        $request->validate([
-            'rejection_reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['rejection_reason' => 'required|string|min:10']);
 
         if ($stockAdjustment->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
 
         $stockAdjustment->status = 'REJECTED';
-        $stockAdjustment->rejection_reason = $request->rejection_reason; // Simpan alasan penolakan
-        $stockAdjustment->approved_by = Auth::id(); // Catat siapa yang menolak
-        $stockAdjustment->approved_at = now(); // Catat kapan ditolak
+        $stockAdjustment->rejection_reason = $request->rejection_reason;
+        $stockAdjustment->approved_by = Auth::id();
+        $stockAdjustment->approved_at = now();
         $stockAdjustment->save();
 
         return redirect()->route('admin.stock-adjustments.index')->with('success', 'Permintaan adjusment stok telah ditolak.');

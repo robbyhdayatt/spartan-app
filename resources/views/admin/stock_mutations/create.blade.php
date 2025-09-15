@@ -72,6 +72,23 @@
 
 @section('plugins.Select2', true)
 
+{{-- CSS Kustom untuk Select2 --}}
+@push('css')
+<style>
+    .select2-container .select2-selection--single {
+        height: calc(2.25rem + 2px) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5 !important;
+        padding-left: .75rem !important;
+        padding-top: .375rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px) !important;
+    }
+</style>
+@endpush
+
 @section('js')
 <script>
 $(document).ready(function() {
@@ -91,7 +108,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Ambil data part berdasarkan gudang
         const url = "{{ route('admin.api.gudang.parts-with-stock', ['gudang' => ':id']) }}".replace(':id', gudangId);
         $.getJSON(url, function(parts) {
             partSelect.prop('disabled', false).html('<option value="">Pilih Part</option>');
@@ -118,7 +134,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Ambil data rak & stok berdasarkan part dan gudang
         const url = "{{ route('admin.api.part.stock', ['part' => ':partId']) }}".replace(':partId', partId) + `?gudang_id=${gudangId}`;
         $.getJSON(url, function(response) {
             rakAsalSelect.prop('disabled', false).html('<option value="">Pilih Rak Asal</option>');
@@ -138,7 +153,6 @@ $(document).ready(function() {
         });
     });
 
-    // Validasi jumlah mutasi tidak melebihi stok di rak
     rakAsalSelect.on('change', function(){
         const maxQty = $(this).find('option:selected').data('max-qty');
         if(maxQty) {
@@ -146,7 +160,6 @@ $(document).ready(function() {
         }
     });
 
-    // Otomatis trigger change jika gudang asal sudah terpilih (untuk non-admin)
     if (gudangAsalSelect.val()) {
         gudangAsalSelect.trigger('change');
     }

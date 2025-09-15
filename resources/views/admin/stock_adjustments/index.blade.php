@@ -12,7 +12,7 @@
         <h3 class="card-title">Daftar Permintaan Adjusment</h3>
         <div class="card-tools">
             @can('can-manage-stock')
-            <a href="{{ route('admin.stock-adjustments.create') }}" class="btn btn-primary btn-sm">Buat Adjusment Baru</a>
+            <a href="{{ route('admin.stock-adjustments.create') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Buat Adjusment Baru</a>
             @endcan
         </div>
     </div>
@@ -23,60 +23,64 @@
          @if(session('error'))
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
-        <table id="stock_adjusment-table" class="table table-bordered table-striped">
+        <table id="stock_adjustment-table" class="table table-bordered table-striped">
             <thead>
                 <tr>
-                    <th>Part</th>
+                    <th>Detail Part</th>
                     <th>Gudang / Rak</th>
-                    <th>Tipe</th>
-                    <th>Jumlah</th>
+                    <th class="text-center">Tipe</th>
+                    <th class="text-center">Jumlah</th>
                     <th>Alasan</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($adjustments as $adj)
                 <tr>
-                    <td>{{ $adj->part->nama_part }}</td>
-                    <td>{{ $adj->gudang->nama_gudang }} / {{ $adj->rak->nama_rak ?? 'N/A' }}</td>
                     <td>
+                        <strong>{{ $adj->part->nama_part }}</strong><br>
+                        <small class="text-muted">{{ $adj->created_at->format('d M Y H:i') }}</small>
+                    </td>
+                    <td>{{ $adj->gudang->nama_gudang }} / {{ $adj->rak->nama_rak ?? 'N/A' }}</td>
+                    <td class="text-center">
                         @if($adj->tipe == 'TAMBAH')
                             <span class="badge badge-success">TAMBAH</span>
                         @else
                             <span class="badge badge-danger">KURANG</span>
                         @endif
                     </td>
-                    <td>{{ $adj->jumlah }}</td>
+                    <td class="text-center font-weight-bold">{{ $adj->jumlah }}</td>
                     <td>
                         {{ $adj->alasan }}
                         @if($adj->status == 'REJECTED' && $adj->rejection_reason)
                            <br><small class="text-danger"><strong>Alasan Tolak:</strong> {{ $adj->rejection_reason }}</small>
                         @endif
                     </td>
-                    <td>
+                    <td class="text-center">
                         @if($adj->status == 'PENDING_APPROVAL')
-                            <span class="badge badge-warning">Menunggu Persetujuan</span>
+                            <span class="badge badge-warning">Menunggu</span>
                         @elseif($adj->status == 'APPROVED')
                             <span class="badge badge-success">Disetujui</span>
                         @elseif($adj->status == 'REJECTED')
                             <span class="badge badge-danger">Ditolak</span>
                         @endif
                     </td>
-                    <td>
+                    <td class="text-center">
                         @if($adj->status === 'PENDING_APPROVAL')
                             @can('approve-adjustment', $adj)
                                 <form action="{{ route('admin.stock-adjustments.approve', $adj->id) }}" method="POST" class="d-inline">
                                     @csrf
-                                    <button type="submit" class="btn btn-success btn-xs">Approve</button>
+                                    <button type="submit" class="btn btn-success btn-xs" title="Approve">
+                                        <i class="fas fa-check"></i>
+                                    </button>
                                 </form>
-                                {{-- Tombol Reject baru dengan modal --}}
-                                <button type="button" class="btn btn-danger btn-xs" data-toggle="modal" data-target="#rejectModal-{{ $adj->id }}">
-                                    Reject
+                                <button type="button" class="btn btn-danger btn-xs" title="Reject" data-toggle="modal" data-target="#rejectModal-{{ $adj->id }}">
+                                    <i class="fas fa-times"></i>
                                 </button>
                             @endcan
                         @else
-                            Diproses oleh {{ $adj->approvedBy->nama ?? 'N/A' }}
+                            <small>Diproses oleh:<br>{{ $adj->approvedBy->nama ?? 'N/A' }}</small>
                         @endif
                     </td>
                 </tr>
@@ -120,5 +124,18 @@
 </div>
 @endif
 @endforeach
+@stop
 
+@section('js')
+<script>
+    $(function () {
+        $("#stock_adjustment-table").DataTable({
+            "responsive": true,
+            "lengthChange": false,
+            "autoWidth": false,
+            "order": [[0, "desc"]],
+            "buttons": ["copy", "csv", "excel", "pdf", "print"]
+        }).buttons().container().appendTo('#stock_adjustment-table_wrapper .col-md-6:eq(0)');
+    });
+</script>
 @stop
