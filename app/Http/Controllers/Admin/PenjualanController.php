@@ -200,6 +200,13 @@ class PenjualanController extends Controller
         return view('admin.penjualans.show', compact('penjualan'));
     }
 
+    public function print(Penjualan $penjualan)
+    {
+        $this->authorize('view-sales');
+        $penjualan->load(['konsumen', 'gudang', 'sales', 'details.part']);
+        return view('admin.penjualans.print', compact('penjualan'));
+    }
+
     public function getDetails($id)
     {
         $penjualan = \App\Models\Penjualan::with('details.part')->find($id);

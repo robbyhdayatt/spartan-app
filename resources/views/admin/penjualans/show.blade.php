@@ -99,10 +99,10 @@
 
     <div class="row no-print">
         <div class="col-12">
-            <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary">Kembali</a>
-            {{-- <button type="button" class="btn btn-primary float-right" style="margin-right: 5px;">
-                <i class="fas fa-download"></i> Generate PDF
-            </button> --}}
+            <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
+
+            {{-- !! TAMBAHKAN TOMBOL INI !! --}}
+            <a href="{{ route('admin.penjualans.print', $penjualan) }}" rel="noopener" target="_blank" class="btn btn-info float-right"><i class="fas fa-print"></i> Cetak Invoice</a>
         </div>
     </div>
 </div>

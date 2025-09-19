@@ -14,6 +14,7 @@ class PurchaseOrder extends Model
 
     protected $casts = [
         'tanggal_po' => 'date',
+        'approved_at' => 'datetime',
     ];
 
     public function details()
@@ -34,6 +35,11 @@ class PurchaseOrder extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approvedBy()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
     // FUNGSI UNTUK TAMPILAN STATUS (WARNA BADGE)
     public function getStatusClassAttribute()

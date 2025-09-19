@@ -116,19 +116,23 @@
     {{-- Baris Tombol Aksi --}}
     <div class="row no-print">
         <div class="col-12">
+            {{-- Tombol Approve dan Reject --}}
             @if($purchaseOrder->status === 'PENDING_APPROVAL')
                 @can('approve-po', $purchaseOrder)
                 <form action="{{ route('admin.purchase-orders.approve', $purchaseOrder) }}" method="POST" class="d-inline">
                     @csrf
                     <button type="submit" class="btn btn-success float-right"><i class="far fa-credit-card"></i> Setujui</button>
                 </form>
-                {{-- TOMBOL TOLAK BARU YANG MEMBUKA MODAL --}}
                 <button type="button" class="btn btn-danger float-right" style="margin-right: 5px;" data-toggle="modal" data-target="#rejectModal">
                     <i class="fas fa-times"></i> Tolak
                 </button>
                 @endcan
             @endif
-             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
+
+            {{-- !! TAMBAHKAN TOMBOL INI !! --}}
+            <a href="{{ route('admin.purchase-orders.print', $purchaseOrder) }}" rel="noopener" target="_blank" class="btn btn-info"><i class="fas fa-print"></i> Cetak PO</a>
+
+            <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
         </div>
     </div>
 </div>

@@ -59,6 +59,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 
     // === TRANSAKSI GUDANG ===
     Route::resource('purchase-orders', PurchaseOrderController::class)->except(['edit', 'update', 'destroy']);
+    Route::get('purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     Route::post('purchase-orders/{purchase_order}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
     Route::post('purchase-orders/{purchase_order}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-orders.reject');
     Route::get('purchase_orders/{purchaseOrder}/details', [PurchaseOrderController::class, 'getPoDetailsApi'])->name('purchase_orders.details_api');
@@ -109,6 +110,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('penjualans/create', [PenjualanController::class, 'create'])->name('penjualans.create');
     Route::post('penjualans', [PenjualanController::class, 'store'])->name('penjualans.store');
     Route::get('penjualans/{penjualan}', [PenjualanController::class, 'show'])->name('penjualans.show');
+    Route::get('penjualans/{penjualan}/print', [PenjualanController::class, 'print'])->name('penjualans.print');
     Route::get('/penjualans/{id}/details', [\App\Http\Controllers\Admin\PenjualanController::class, 'getDetails'])->name('penjualans.getDetails');
     Route::get('/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('penjualans.returnable-items');
 
