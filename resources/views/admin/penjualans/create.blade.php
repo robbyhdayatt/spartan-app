@@ -9,10 +9,10 @@
     $isSales = $user->jabatan->nama_jabatan === 'Sales';
 @endphp
 <div class="card">
-    <form action="{{ route('admin.penjualans.store') }}" method="POST">
+    <form action="{{ route('admin.penjualans.store') }}" method="POST" id="penjualan-form">
         @csrf
         <div class="card-body">
-             @if ($errors->any())
+            @if ($errors->any())
                 <div class="alert alert-danger">
                     <ul class="mb-0">
                         @foreach ($errors->all() as $error)
@@ -24,6 +24,7 @@
             @if(session('error'))
                 <div class="alert alert-danger">{{ session('error') }}</div>
             @endif
+
             {{-- Header --}}
             <div class="row">
                 <div class="col-md-3 form-group">
@@ -46,7 +47,7 @@
                 </div>
                 <div class="col-md-3 form-group">
                     <label>Konsumen</label>
-                    <select class="form-control select2" name="konsumen_id" required style="width: 100%;">
+                    <select class="form-control select2" id="konsumen-select" name="konsumen_id" required style="width: 100%;">
                         <option value="" disabled selected>Pilih Konsumen</option>
                         @foreach($konsumens as $konsumen)
                         <option value="{{ $konsumen->id }}">{{ $konsumen->nama_konsumen }}</option>
@@ -76,9 +77,9 @@
                 <thead>
                     <tr>
                         <th width="30%">Part</th>
-                        <th width="30%">Rak</th>
+                        <th width="25%">Rak</th>
                         <th width="10%">Qty</th>
-                        <th width="15%">Harga</th>
+                        <th width="20%">Harga</th>
                         <th width="15%">Subtotal</th>
                         <th></th>
                     </tr>
@@ -87,9 +88,9 @@
                     {{-- Rows added via JS --}}
                 </tbody>
             </table>
-            <button type="button" class="btn btn-success btn-sm" id="add-item-btn">+ Tambah Item</button>
+            <button type="button" class="btn btn-success btn-sm" id="add-item-btn" disabled>+ Tambah Item</button>
 
-            {{-- PERBAIKAN 1: Tambahkan Total Kalkulasi dan PPN --}}
+            {{-- Total Kalkulasi dan PPN --}}
             <div class="row justify-content-end mt-4">
                 <div class="col-md-5">
                     <table class="table table-sm">
@@ -101,9 +102,7 @@
                             <th>
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="ppn-checkbox" name="kena_ppn" value="1">
-                                    <label class="form-check-label" for="ppn-checkbox">
-                                        PPN (11%)
-                                    </label>
+                                    <label class="form-check-label" for="ppn-checkbox">PPN (11%)</label>
                                 </div>
                             </th>
                             <td class="text-right" id="display-ppn">Rp 0</td>
@@ -113,10 +112,6 @@
                             <td class="text-right font-weight-bold" style="font-size: 1.2rem;" id="display-grand-total">Rp 0</td>
                         </tr>
                     </table>
-                     {{-- Hidden inputs to store calculated values --}}
-                     <input type="hidden" name="subtotal" id="input-subtotal" value="0">
-                     <input type="hidden" name="ppn_jumlah" id="input-ppn" value="0">
-                     <input type="hidden" name="total_harga" id="input-grand-total" value="0">
                 </div>
             </div>
         </div>
@@ -127,11 +122,12 @@
     </form>
 </div>
 
+{{-- TEMPLATE UNTUK BARIS ITEM BARU --}}
 <template id="item-template">
     <tr>
         <td>
             <select class="form-control item-part" name="items[__INDEX__][part_id]" required style="width: 100%;">
-                <option value="" disabled selected>Pilih Gudang Dahulu</option>
+                <option value="" disabled selected>Pilih Part</option>
             </select>
         </td>
         <td>
@@ -140,182 +136,176 @@
             </select>
         </td>
         <td><input type="number" class="form-control item-qty" name="items[__INDEX__][qty]" min="1" value="1" required></td>
-        <td><input type="number" class="form-control item-harga" name="items[__INDEX__][harga]" min="0" required></td>
-        <td><input type="text" class="form-control item-subtotal" readonly></td>
+        <td>
+            {{-- Harga akan diisi oleh JS, dibuat readonly agar tidak bisa diubah manual --}}
+            <input type="text" class="form-control item-harga text-right" name="items[__INDEX__][harga_display]" readonly>
+            {{-- Info diskon akan ditampilkan di sini --}}
+            <small class="form-text text-muted price-info"></small>
+        </td>
+        <td><input type="text" class="form-control item-subtotal text-right" readonly></td>
         <td><button type="button" class="btn btn-danger btn-sm remove-item-btn">&times;</button></td>
     </tr>
 </template>
 @stop
 
+@section('plugins.Select2', true)
 @section('js')
 <script>
 $(document).ready(function() {
-    $('.select2').select2({
-        placeholder: "Pilih Opsi",
-    });
+    $('.select2').select2({ placeholder: "Pilih Opsi" });
 
     let itemIndex = 0;
-    let partsCache = {};
+    let partsCache = {}; // Cache untuk daftar part per gudang
     const addItemBtn = $('#add-item-btn');
+    const gudangSelect = $('#gudang-select');
+    const konsumenSelect = $('#konsumen-select');
+    const itemsTable = $('#items-table');
 
-    // ... (fungsi refreshPartOptions dan loadParts tetap sama) ...
-    function refreshPartOptions() {
-        let selectedParts = [];
-        $('.item-part').each(function() {
-            let val = $(this).val();
-            if (val) selectedParts.push(val);
-        });
-        $('.item-part option').prop('disabled', false);
-        $('.item-part').each(function() {
-            let currentVal = $(this).val();
-            $(this).find('option').each(function() {
-                if (selectedParts.includes($(this).val()) && $(this).val() !== currentVal) {
-                    $(this).prop('disabled', true);
-                }
-            });
-        });
-        $('.item-part').trigger('change.select2');
+    // Fungsi untuk format Rupiah
+    const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
+
+    // Aktifkan tombol "Tambah Item" hanya jika Gudang dan Konsumen sudah dipilih
+    function toggleAddItemButton() {
+        if (gudangSelect.val() && konsumenSelect.val()) {
+            addItemBtn.prop('disabled', false);
+        } else {
+            addItemBtn.prop('disabled', true);
+        }
     }
 
+    // Muat daftar part saat gudang dipilih
     function loadParts(gudangId) {
         partsCache = {};
-        $('#items-table').empty();
-        addItemBtn.prop('disabled', true).text('Loading Parts...');
-        if (gudangId) {
-            let url = "{{ route('admin.api.gudang.parts', ['gudang' => ':gudangId']) }}";
-            url = url.replace(':gudangId', gudangId);
-            $.getJSON(url, function(data) {
-                partsCache = data;
-                addItemBtn.prop('disabled', false).text('+ Tambah Item');
-                calculateAll(); // Kalkulasi ulang jika daftar part berubah
-            }).fail(function() {
-                alert("Gagal memuat data part.");
-                addItemBtn.prop('disabled', false).text('+ Tambah Item');
-            });
-        }
+        itemsTable.empty();
+        addItemBtn.text('Loading Parts...').prop('disabled', true);
+
+        let url = "{{ route('admin.api.gudang.parts', ['gudang' => ':gudangId']) }}".replace(':gudangId', gudangId);
+
+        $.getJSON(url, function(data) {
+            partsCache = data;
+            addItemBtn.text('+ Tambah Item');
+            toggleAddItemButton();
+            calculateAll();
+        }).fail(() => alert("Gagal memuat data part."));
     }
 
+    // --- EVENT LISTENERS ---
 
-    @if($isSales)
-        loadParts({{ $user->gudang_id }});
-    @endif
-
-    $('#gudang-select').on('change', function() {
-        loadParts($(this).val());
+    // Jika Gudang atau Konsumen berubah
+    gudangSelect.add(konsumenSelect).on('change', function() {
+        toggleAddItemButton();
+        const currentGudang = gudangSelect.val();
+        // Jika gudang berubah, reset tabel dan muat ulang parts
+        if ($(this).is('#gudang-select')) {
+             loadParts(currentGudang);
+        }
     });
 
+    // Tambah baris item baru
     addItemBtn.on('click', function() {
-        if (!$('#gudang-select').val()) {
-            alert('Pilih gudang terlebih dahulu!');
-            return;
-        }
         let template = $('#item-template').html().replace(/__INDEX__/g, itemIndex);
-        $('#items-table').append(template);
-        let newRow = $(`#items-table tr`).last();
+        itemsTable.append(template);
+
+        let newRow = itemsTable.find('tr').last();
         let partSelect = newRow.find('.item-part');
-        let rakSelect = newRow.find('.item-rak');
-        partSelect.html('<option value="" disabled selected>Pilih Part</option>');
-        if(Object.keys(partsCache).length > 0) {
-             partsCache.forEach(function(part) {
-                let option = new Option(`${part.nama_part} (${part.kode_part})`, part.id);
-                $(option).attr('data-harga', part.effective_price);
-                partSelect.append(option);
-            });
-        } else {
-            partSelect.html('<option value="" disabled selected>Tidak ada stok part di gudang ini</option>');
-        }
-        partSelect.select2({ placeholder: "Pilih Part" });
-        rakSelect.select2({ placeholder: "Pilih Part Dahulu" });
-        itemIndex++;
-        refreshPartOptions();
-    });
 
-    $('#items-table').on('click', '.remove-item-btn', function() {
-        $(this).closest('tr').remove();
-        refreshPartOptions();
-        calculateAll(); // Kalkulasi ulang setelah item dihapus
-    });
-
-    $('#items-table').on('change', '.item-part', function() {
-        let row = $(this).closest('tr');
-        let partId = $(this).val();
-        let rakSelect = row.find('.item-rak');
-        let gudangId = $('#gudang-select').val();
-        let hargaInput = row.find('.item-harga');
-        let effectivePrice = $(this).find('option:selected').data('harga') || 0;
-        hargaInput.val(effectivePrice);
-        updateSubtotal(row);
-        rakSelect.html('<option value="" disabled selected>Loading...</option>');
-        if (partId && gudangId) {
-            let url = "{{ route('admin.api.part.stock', ['part' => ':partId']) }}";
-            url = url.replace(':partId', partId) + `?gudang_id=${gudangId}`;
-            $.getJSON(url, function(response) { // Mengganti nama variabel 'data' menjadi 'response' agar lebih jelas
-                rakSelect.empty().html('<option value="" disabled selected>Pilih Rak (Stok)</option>');
-
-                // PERBAIKAN: Lakukan loop pada response.stock_details
-                if (response.stock_details && response.stock_details.length > 0) {
-                    response.stock_details.forEach(function(stock) {
-                        rakSelect.append(new Option(`${stock.rak.kode_rak} (Stok: ${stock.quantity})`, stock.rak.id)); // Juga perbaiki 'stock.rak_id' menjadi 'stock.rak.id'
-                    });
-                } else {
-                    rakSelect.html('<option value="" disabled selected>Stok tidak ditemukan</option>');
-                }
-
-                rakSelect.select2({ placeholder: "Pilih Rak (Stok)" });
-            }).fail(function() {
-                alert('Gagal memuat detail stok rak.');
-                rakSelect.empty().html('<option value="" disabled selected>Error, coba lagi</option>');
-            });
-        }
-        refreshPartOptions();
-    });
-
-    function updateSubtotal(row) {
-        let harga = parseFloat(row.find('.item-harga').val()) || 0;
-        let qty = parseInt(row.find('.item-qty').val()) || 0;
-        let subtotal = qty * harga;
-        row.find('.item-subtotal').val(subtotal.toLocaleString('id-ID'));
-        calculateAll(); // Panggil kalkulasi total setiap subtotal berubah
-    }
-
-    // PERBAIKAN 2: Tambahkan fungsi kalkulasi PPN dan Grand Total
-    function calculateAll() {
-        let subtotalTotal = 0;
-        $('#items-table tr').each(function() {
-            let harga = parseFloat($(this).find('.item-harga').val()) || 0;
-            let qty = parseInt($(this).find('.item-qty').val()) || 0;
-            subtotalTotal += harga * qty;
+        partSelect.append(new Option('Pilih Part', '', true, true));
+        partsCache.forEach(part => {
+            partSelect.append(new Option(`${part.nama_part} (${part.kode_part})`, part.id));
         });
 
-        let ppnAmount = 0;
-        if ($('#ppn-checkbox').is(':checked')) {
-            ppnAmount = subtotalTotal * 0.11;
-        }
+        newRow.find('.select2, .item-part, .item-rak').select2({ placeholder: "Pilih Opsi" });
+        itemIndex++;
+    });
 
-        let grandTotal = subtotalTotal + ppnAmount;
+    // Hapus baris item
+    itemsTable.on('click', '.remove-item-btn', function() {
+        $(this).closest('tr').remove();
+        calculateAll();
+    });
 
-        const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+    // Event utama: Saat Part dipilih
+    itemsTable.on('change', '.item-part', function() {
+        let row = $(this).closest('tr');
+        let partId = $(this).val();
+        let gudangId = gudangSelect.val();
+        let konsumenId = konsumenSelect.val();
+        let rakSelect = row.find('.item-rak');
+        let hargaDisplay = row.find('.item-harga');
+        let priceInfo = row.find('.price-info');
 
-        // Update display
-        $('#display-subtotal').text(formatter.format(subtotalTotal));
-        $('#display-ppn').text(formatter.format(ppnAmount));
-        $('#display-grand-total').text(formatter.format(grandTotal));
+        // Reset tampilan
+        rakSelect.empty().prop('disabled', true);
+        hargaDisplay.val('');
+        priceInfo.text('Loading harga...');
 
-        // Update hidden inputs for submission
-        $('#input-subtotal').val(subtotalTotal);
-        $('#input-ppn').val(ppnAmount);
-        $('#input-grand-total').val(grandTotal);
+        if (!partId || !gudangId || !konsumenId) return;
+
+        let url = "{{ route('admin.api.part.stock', ['part' => ':partId']) }}"
+            .replace(':partId', partId) + `?gudang_id=${gudangId}&konsumen_id=${konsumenId}`;
+
+        $.getJSON(url, function(response) {
+            // Isi pilihan RAK
+            rakSelect.append(new Option('Pilih Rak (Stok)', '', true, true)).prop('disabled', false);
+            response.stock_details.forEach(stock => {
+                rakSelect.append(new Option(`${stock.nama_rak} (Stok: ${stock.quantity})`, stock.rak_id));
+            });
+            rakSelect.trigger('change');
+
+            // Proses hasil diskon dan tampilkan
+            const discount = response.discount_result;
+            hargaDisplay.val(formatRupiah(discount.final_price));
+
+            if (discount.applied_discounts.length > 0) {
+                 priceInfo.html(`Asli: <del>${formatRupiah(discount.original_price)}</del> <br> <span class="text-success">${discount.applied_discounts.join(', ')}</span>`);
+            } else {
+                 priceInfo.text('');
+            }
+            updateSubtotal(row);
+
+        }).fail(() => {
+            alert('Gagal memuat detail stok & harga.');
+            priceInfo.text('Error');
+        });
+    });
+
+    // Update subtotal saat qty berubah
+    itemsTable.on('keyup change', '.item-qty', function() {
+        updateSubtotal($(this).closest('tr'));
+    });
+
+    // Fungsi untuk update subtotal per baris
+    function updateSubtotal(row) {
+        // Ambil harga dari text display, hilangkan format Rupiah, lalu parse
+        let hargaText = row.find('.item-harga').val().replace(/[^0-9,-]+/g,"").replace(',','.');
+        let harga = parseFloat(hargaText) || 0;
+        let qty = parseInt(row.find('.item-qty').val()) || 0;
+        row.find('.item-subtotal').val(formatRupiah(qty * harga));
+        calculateAll();
     }
 
-    // Panggil kalkulasi saat kuantitas atau harga diubah
-     $('#items-table').on('keyup change', '.item-qty, .item-harga', function() {
-        updateSubtotal($(this).closest('tr'));
-     });
+    // Fungsi untuk kalkulasi total keseluruhan
+    function calculateAll() {
+        let subtotalTotal = 0;
+        itemsTable.find('tr').each(function() {
+            let subtotalText = $(this).find('.item-subtotal').val().replace(/[^0-9,-]+/g,"").replace(',','.');
+            subtotalTotal += parseFloat(subtotalText) || 0;
+        });
 
-     // Panggil kalkulasi saat checkbox PPN diubah
-     $('#ppn-checkbox').on('change', function() {
-        calculateAll();
-     });
+        let ppnAmount = $('#ppn-checkbox').is(':checked') ? subtotalTotal * 0.11 : 0;
+        let grandTotal = subtotalTotal + ppnAmount;
+
+        $('#display-subtotal').text(formatRupiah(subtotalTotal));
+        $('#display-ppn').text(formatRupiah(ppnAmount));
+        $('#display-grand-total').text(formatRupiah(grandTotal));
+    }
+
+    $('#ppn-checkbox').on('change', calculateAll);
+
+    // Inisialisasi jika gudang sudah terpilih (untuk role Sales)
+    if(gudangSelect.val()){
+        loadParts(gudangSelect.val());
+    }
 });
 </script>
 @stop

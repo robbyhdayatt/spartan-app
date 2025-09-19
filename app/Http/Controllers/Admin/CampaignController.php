@@ -5,123 +5,188 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\Part;
+use App\Models\Supplier;
+use App\Models\Konsumen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 class CampaignController extends Controller
 {
+    // ... (fungsi index() dan store() yang sudah ada tetap sama) ...
     public function index()
     {
-        $campaigns = Campaign::with('part')->latest()->get();
+        $campaigns = Campaign::with(['parts', 'suppliers'])->latest()->get();
         $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
-        return view('admin.campaigns.index', compact('campaigns', 'parts'));
+        $suppliers = Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
+        $konsumens = Konsumen::where('is_active', true)->orderBy('nama_konsumen')->get();
+        return view('admin.campaigns.index', compact('campaigns', 'parts', 'suppliers', 'konsumens'));
     }
 
     public function store(Request $request)
     {
         $this->authorize('is-manager');
-        
         $validated = $request->validate([
             'nama_campaign' => 'required|string|max:255',
-            'part_id' => 'required|exists:parts,id',
-            'harga_promo' => 'required|numeric|min:0',
+            'tipe' => 'required|in:PENJUALAN,PEMBELIAN',
+            'discount_percentage' => 'required|numeric|min:0|max:100',
             'tanggal_mulai' => 'required|date',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
-            'tipe' => 'required|in:PENJUALAN,PEMBELIAN',
+            'applies_to_all_parts' => 'required|boolean',
+            'part_ids' => 'required_if:applies_to_all_parts,false|array',
+            'part_ids.*' => 'exists:parts,id',
         ]);
+        DB::beginTransaction();
+        try {
+            $campaign = Campaign::create([
+                'nama_campaign' => $validated['nama_campaign'],
+                'tipe' => $validated['tipe'],
+                'discount_percentage' => $validated['discount_percentage'],
+                'tanggal_mulai' => $validated['tanggal_mulai'],
+                'tanggal_selesai' => $validated['tanggal_selesai'],
+                'created_by' => Auth::id(),
+            ]);
 
-        // **VALIDASI DUPLIKASI CAMPAIGN**
-        $this->validateCampaignOverlap(
-            $validated['part_id'], 
-            $validated['tipe'], 
-            $validated['tanggal_mulai'], 
-            $validated['tanggal_selesai']
-        );
+            if ($validated['tipe'] === 'PEMBELIAN') {
+                $request->validate([
+                    'applies_to_all_suppliers' => 'required|boolean',
+                    'supplier_ids' => 'required_if:applies_to_all_suppliers,false|array',
+                    'supplier_ids.*' => 'exists:suppliers,id',
+                ]);
+                if (!$request->applies_to_all_suppliers) {
+                    $campaign->suppliers()->attach($request->supplier_ids);
+                }
+            }
 
-        Campaign::create($validated + ['created_by' => Auth::id()]);
+            if (!$validated['applies_to_all_parts']) {
+                $campaign->parts()->attach($validated['part_ids']);
+            }
 
-        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign berhasil ditambahkan.');
-    }
-
-    public function update(Request $request, Campaign $campaign)
-    {
-        $this->authorize('is-manager');
-        
-        $validated = $request->validate([
-            'nama_campaign' => 'required|string|max:255',
-            'part_id' => 'required|exists:parts,id',
-            'harga_promo' => 'required|numeric|min:0',
-            'tanggal_mulai' => 'required|date',
-            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
-            'is_active' => 'required|boolean',
-            'tipe' => 'required|in:PENJUALAN,PEMBELIAN',
-        ]);
-
-        // **VALIDASI DUPLIKASI CAMPAIGN (kecuali campaign yang sedang di-update)**
-        $this->validateCampaignOverlap(
-            $validated['part_id'], 
-            $validated['tipe'], 
-            $validated['tanggal_mulai'], 
-            $validated['tanggal_selesai'],
-            $campaign->id // Exclude campaign yang sedang di-update
-        );
-
-        $campaign->update($validated);
-
-        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign berhasil diperbarui.');
-    }
-
-    public function destroy(Campaign $campaign)
-    {
-        $this->authorize('is-manager');
-        $campaign->delete();
-        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign berhasil dihapus.');
+            if ($validated['tipe'] === 'PENJUALAN' && $request->has('categories')) {
+                foreach ($request->categories as $categoryData) {
+                    $category = $campaign->categories()->create([
+                        'nama_kategori' => $categoryData['nama'],
+                        'discount_percentage' => $categoryData['diskon'],
+                    ]);
+                    if (!empty($categoryData['konsumen_ids'])) {
+                        $category->konsumens()->attach($categoryData['konsumen_ids']);
+                    }
+                }
+            }
+            DB::commit();
+            return redirect()->route('admin.campaigns.index')->with('success', 'Campaign baru berhasil dibuat.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
+        }
     }
 
     /**
-     * Validasi overlap campaign untuk part dan tipe yang sama
+     * Menampilkan form untuk mengedit campaign.
      */
-    private function validateCampaignOverlap($partId, $tipe, $tanggalMulai, $tanggalSelesai, $excludeId = null)
+    public function edit(Campaign $campaign)
     {
-        $query = Campaign::where('part_id', $partId)
-            ->where('tipe', $tipe)
-            ->where('is_active', true)
-            ->where(function($query) use ($tanggalMulai, $tanggalSelesai) {
-                // Cek overlap periode:
-                // 1. Campaign baru mulai di tengah campaign existing
-                $query->whereBetween('tanggal_mulai', [$tanggalMulai, $tanggalSelesai])
-                    // 2. Campaign baru selesai di tengah campaign existing  
-                    ->orWhereBetween('tanggal_selesai', [$tanggalMulai, $tanggalSelesai])
-                    // 3. Campaign existing berada di tengah campaign baru
-                    ->orWhere(function($q) use ($tanggalMulai, $tanggalSelesai) {
-                        $q->where('tanggal_mulai', '<=', $tanggalMulai)
-                          ->where('tanggal_selesai', '>=', $tanggalSelesai);
-                    })
-                    // 4. Campaign baru menutupi campaign existing
-                    ->orWhere(function($q) use ($tanggalMulai, $tanggalSelesai) {
-                        $q->where('tanggal_mulai', '>=', $tanggalMulai)
-                          ->where('tanggal_selesai', '<=', $tanggalSelesai);
-                    });
-            });
+        $this->authorize('is-manager');
 
-        // Exclude campaign yang sedang di-update
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
+        // Eager load semua relasi yang akan ditampilkan di form
+        $campaign->load(['parts', 'suppliers', 'categories.konsumens']);
 
-        $existingCampaign = $query->with('part')->first();
+        // Ambil semua data master untuk pilihan dropdown
+        $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
+        $suppliers = Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
+        $konsumens = Konsumen::where('is_active', true)->orderBy('nama_konsumen')->get();
 
-        if ($existingCampaign) {
-            $partName = $existingCampaign->part->nama_part ?? 'Unknown';
-            $tipeLabel = $tipe === 'PENJUALAN' ? 'Penjualan' : 'Pembelian';
-            
-            throw ValidationException::withMessages([
-                'part_id' => "Campaign {$tipeLabel} untuk part '{$partName}' sudah ada dalam periode yang overlap (" . 
-                           date('d M Y', strtotime($existingCampaign->tanggal_mulai)) . " - " . 
-                           date('d M Y', strtotime($existingCampaign->tanggal_selesai)) . "). " .
-                           "Silakan pilih periode yang berbeda."
+        return view('admin.campaigns.edit', compact('campaign', 'parts', 'suppliers', 'konsumens'));
+    }
+
+    /**
+     * Memperbarui data campaign di database.
+     */
+    public function update(Request $request, Campaign $campaign)
+    {
+        $this->authorize('is-manager');
+
+        // Validasi sama seperti store, ditambah status 'is_active'
+        $validated = $request->validate([
+            'nama_campaign' => 'required|string|max:255',
+            'is_active' => 'required|boolean', // Tambahan
+            'discount_percentage' => 'required|numeric|min:0|max:100',
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'applies_to_all_parts' => 'required|boolean',
+            'part_ids' => 'required_if:applies_to_all_parts,false|array',
+            'part_ids.*' => 'exists:parts,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // 1. Update data utama di tabel 'campaigns'
+            $campaign->update([
+                'nama_campaign' => $validated['nama_campaign'],
+                'is_active' => $validated['is_active'],
+                'discount_percentage' => $validated['discount_percentage'],
+                'tanggal_mulai' => $validated['tanggal_mulai'],
+                'tanggal_selesai' => $validated['tanggal_selesai'],
             ]);
+
+            // 2. Update relasi part menggunakan sync()
+            if ($validated['applies_to_all_parts']) {
+                $campaign->parts()->detach(); // Hapus semua relasi jika berlaku untuk semua
+            } else {
+                $campaign->parts()->sync($validated['part_ids']);
+            }
+
+            // 3. Update relasi supplier untuk tipe PEMBELIAN
+            if ($campaign->tipe === 'PEMBELIAN') {
+                $request->validate([
+                    'applies_to_all_suppliers' => 'required|boolean',
+                    'supplier_ids' => 'required_if:applies_to_all_suppliers,false|array',
+                    'supplier_ids.*' => 'exists:suppliers,id',
+                ]);
+
+                if ($request->applies_to_all_suppliers) {
+                    $campaign->suppliers()->detach();
+                } else {
+                    $campaign->suppliers()->sync($request->supplier_ids);
+                }
+            }
+
+            // 4. Update kategori diskon untuk tipe PENJUALAN
+            if ($campaign->tipe === 'PENJUALAN') {
+                // Hapus semua kategori lama dan relasinya
+                $campaign->categories()->delete();
+
+                // Buat ulang kategori dari data form yang baru
+                if ($request->has('categories')) {
+                    foreach ($request->categories as $categoryData) {
+                        $category = $campaign->categories()->create([
+                            'nama_kategori' => $categoryData['nama'],
+                            'discount_percentage' => $categoryData['diskon'],
+                        ]);
+
+                        if (!empty($categoryData['konsumen_ids'])) {
+                            $category->konsumens()->attach($categoryData['konsumen_ids']);
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+            return redirect()->route('admin.campaigns.index')->with('success', 'Campaign berhasil diperbarui.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
         }
+    }
+
+    /**
+     * Menghapus campaign.
+     */
+    public function destroy(Campaign $campaign)
+    {
+        $this->authorize('is-manager');
+        $campaign->delete(); // onDelete('cascade') akan menghapus semua relasi di tabel pivot
+        return redirect()->route('admin.campaigns.index')->with('success', 'Campaign berhasil dihapus.');
     }
 }

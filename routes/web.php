@@ -160,4 +160,6 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/api/gudangs/{gudang}/parts-with-stock', [StockMutationController::class, 'getPartsWithStock'])->name('api.gudang.parts-with-stock');
     Route::get('api/receivings/{receiving}/failed-items', [PurchaseReturnController::class, 'getFailedItems'])->name('api.receivings.failed-items');
     Route::get('api/penjualans/{penjualan}/returnable-items', [SalesReturnController::class, 'getReturnableItems'])->name('api.penjualans.returnable-items');
+    Route::get('api/parts/{part}/purchase-details', [PurchaseOrderController::class, 'getPartPurchaseDetails'])->name('api.part.purchase-details');
+
 });

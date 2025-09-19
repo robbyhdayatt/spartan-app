@@ -10,9 +10,18 @@ use App\Models\Part;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\DiscountService; // <-- IMPORT SERVICE KITA
 
 class PurchaseOrderController extends Controller
 {
+    protected $discountService;
+
+    // 1. Inject DiscountService melalui Constructor
+    public function __construct(DiscountService $discountService)
+    {
+        $this->discountService = $discountService;
+    }
+
     public function index()
     {
         $purchaseOrders = PurchaseOrder::with(['supplier', 'gudang', 'createdBy'])->latest()->get();
@@ -23,39 +32,43 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('create-po');
         $user = auth()->user();
-        $suppliers = \App\Models\Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
+        $suppliers = Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
 
         if ($user->jabatan->nama_jabatan === 'PJ Gudang') {
-            $gudangs = \App\Models\Gudang::where('id', $user->gudang_id)->get();
+            $gudangs = Gudang::where('id', $user->gudang_id)->get();
         } else {
-            $gudangs = \App\Models\Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         }
 
-        $today = now()->toDateString();
-        $parts = \App\Models\Part::where('parts.is_active', true)
-            ->leftJoin('campaigns', function ($join) use ($today) {
-                $join->on('parts.id', '=', 'campaigns.part_id')
-                    ->where('campaigns.is_active', true)
-                    ->where('campaigns.tipe', 'PEMBELIAN')
-                    ->where('campaigns.tanggal_mulai', '<=', $today)
-                    ->where('campaigns.tanggal_selesai', '>=', $today);
-            })
-            ->select('parts.*', DB::raw('COALESCE(campaigns.harga_promo, parts.harga_beli_default) as effective_price'))
-            ->orderBy('nama_part')->get();
+        // Mengambil part sekarang lebih sederhana
+        $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
 
         return view('admin.purchase_orders.create', compact('suppliers', 'gudangs', 'parts'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
+    // 2. API BARU: Untuk mendapatkan harga beli part setelah diskon
+    public function getPartPurchaseDetails(Part $part, Request $request)
+    {
+        $validated = $request->validate([
+            'supplier_id' => 'required|exists:suppliers,id',
+        ]);
+
+        $supplier = Supplier::find($validated['supplier_id']);
+
+        // Panggil DiscountService untuk kalkulasi harga beli
+        $discountResult = $this->discountService->calculatePurchaseDiscount($part, $supplier, $part->harga_beli_default);
+
+        return response()->json([
+            'discount_result' => $discountResult,
+        ]);
+    }
+
+
+    // 3. MODIFIKASI BESAR: store() sekarang menghitung ulang semua harga di server
     public function store(Request $request)
     {
         $this->authorize('create-po');
-        $request->validate([
+        $validated = $request->validate([
             'tanggal_po' => 'required|date',
             'supplier_id' => 'required|exists:suppliers,id',
             'gudang_id' => 'required|exists:gudangs,id',
@@ -63,73 +76,55 @@ class PurchaseOrderController extends Controller
             'items' => 'required|array|min:1',
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.qty' => 'required|integer|min:1',
-            // Validasi harga tidak lagi diperlukan karena kita akan mengambilnya dari server
-            // 'items.*.harga' => 'required|numeric|min:0',
             'use_ppn' => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
         try {
-            $subtotal = 0;
-            $today = now()->toDateString();
+            $supplier = Supplier::find($validated['supplier_id']);
+            $totalSubtotal = 0;
             $itemsToSave = [];
 
-            // --- TAHAP 1: Validasi dan Kalkulasi Ulang Harga di Server ---
-            foreach ($request->items as $itemData) {
-                // Ambil part dari DB beserta harga efektifnya (harga campaign jika ada)
-                $part = Part::where('parts.id', $itemData['part_id'])
-                    ->leftJoin('campaigns', function ($join) use ($today) {
-                        $join->on('parts.id', '=', 'campaigns.part_id')
-                            ->where('campaigns.is_active', true)
-                            ->where('campaigns.tipe', 'PEMBELIAN')
-                            ->where('campaigns.tanggal_mulai', '<=', $today)
-                            ->where('campaigns.tanggal_selesai', '>=', $today);
-                    })
-                    ->select('parts.*', DB::raw('COALESCE(campaigns.harga_promo, parts.harga_beli_default) as effective_price'))
-                    ->firstOrFail();
+            foreach ($validated['items'] as $itemData) {
+                $part = Part::find($itemData['part_id']);
+                $qty = (int)$itemData['qty'];
 
-                $hargaBeliAktual = $part->effective_price;
-                $qty = $itemData['qty'];
-                $itemSubtotal = $qty * $hargaBeliAktual;
+                // HITUNG ULANG HARGA DI SERVER MENGGUNAKAN SERVICE
+                $discountResult = $this->discountService->calculatePurchaseDiscount($part, $supplier, $part->harga_beli_default);
+                $finalPrice = $discountResult['final_price'];
+                $itemSubtotal = $qty * $finalPrice;
+                $totalSubtotal += $itemSubtotal;
 
-                // Kumpulkan data yang sudah divalidasi
                 $itemsToSave[] = [
                     'part_id' => $part->id,
                     'qty_pesan' => $qty,
-                    'harga_beli' => $hargaBeliAktual,
+                    'harga_beli' => $finalPrice,
                     'subtotal' => $itemSubtotal,
                 ];
-
-                // Akumulasi subtotal keseluruhan
-                $subtotal += $itemSubtotal;
             }
 
-            // --- TAHAP 2: Hitung Pajak dan Total ---
-            $pajak = 0;
-            if ($request->has('use_ppn') && $request->use_ppn) {
-                $pajak = $subtotal * 0.11;
-            }
-            $totalAmount = $subtotal + $pajak;
+            // Hitung Pajak dan Total
+            $pajak = ($request->has('use_ppn') && $request->use_ppn) ? $totalSubtotal * 0.11 : 0;
+            $totalAmount = $totalSubtotal + $pajak;
 
-            // --- TAHAP 3: Simpan Purchase Order dan Detailnya ---
+            // Buat Purchase Order
             $po = PurchaseOrder::create([
                 'nomor_po' => $this->generatePoNumber(),
-                'tanggal_po' => $request->tanggal_po,
-                'supplier_id' => $request->supplier_id,
-                'gudang_id' => $request->gudang_id,
+                'tanggal_po' => $validated['tanggal_po'],
+                'supplier_id' => $validated['supplier_id'],
+                'gudang_id' => $validated['gudang_id'],
                 'catatan' => $request->catatan,
                 'status' => 'PENDING_APPROVAL',
                 'created_by' => Auth::id(),
-                'subtotal' => $subtotal,
+                'subtotal' => $totalSubtotal,
                 'pajak' => $pajak,
                 'total_amount' => $totalAmount,
             ]);
 
-            // Simpan semua item detail yang sudah divalidasi harganya
             $po->details()->createMany($itemsToSave);
 
             DB::commit();
-            return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dibuat dengan harga yang tervalidasi.');
+            return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase Order berhasil dibuat dengan harga terverifikasi.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -139,6 +134,7 @@ class PurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder)
     {
+        // ... (fungsi show, generatePoNumber, approve, reject, getPoDetailsApi tetap sama) ...
         $purchaseOrder->load(['supplier', 'gudang', 'details.part']);
         $creatorName = \App\Models\User::find($purchaseOrder->created_by)->name ?? 'User Tidak Dikenal';
         return view('admin.purchase_orders.show', compact('purchaseOrder', 'creatorName'));
@@ -154,43 +150,35 @@ class PurchaseOrderController extends Controller
 
     public function approve(PurchaseOrder $purchaseOrder)
     {
-        // Cukup gunakan satu otorisasi yang sudah jelas
         $this->authorize('approve-po', $purchaseOrder);
-
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Hanya PO yang berstatus PENDING APPROVAL yang bisa disetujui.');
         }
-
-        $purchaseOrder->status = 'APPROVED';
-        $purchaseOrder->approved_by = Auth::id();
-        $purchaseOrder->approved_at = now();
-        $purchaseOrder->save();
-
+        $purchaseOrder->update([
+            'status' => 'APPROVED',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
         return redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('success', 'Purchase Order berhasil disetujui.');
     }
 
-    public function reject(Request $request, PurchaseOrder $purchaseOrder) // Tambahkan Request $request
+    public function reject(Request $request, PurchaseOrder $purchaseOrder)
     {
         $this->authorize('approve-po', $purchaseOrder);
-
-        // Validasi bahwa alasan penolakan wajib diisi
-        $request->validate([
-            'rejection_reason' => 'required|string|min:10',
-        ]);
-
+        $request->validate(['rejection_reason' => 'required|string|min:10']);
         if ($purchaseOrder->status !== 'PENDING_APPROVAL') {
             return back()->with('error', 'Hanya PO yang berstatus PENDING APPROVAL yang bisa ditolak.');
         }
-
-        $purchaseOrder->status = 'REJECTED';
-        $purchaseOrder->rejection_reason = $request->rejection_reason; // Simpan alasan penolakan
-        $purchaseOrder->approved_by = Auth::id(); // Catat siapa yang menolak
-        $purchaseOrder->approved_at = now(); // Catat kapan ditolak
-        $purchaseOrder->save();
-
+        $purchaseOrder->update([
+            'status' => 'REJECTED',
+            'rejection_reason' => $request->rejection_reason,
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
         return redirect()->route('admin.purchase-orders.show', $purchaseOrder)->with('success', 'Purchase Order berhasil ditolak.');
     }
 
+    // API lama untuk receiving, tetap dipertahankan
     public function getPoDetailsApi(PurchaseOrder $purchaseOrder)
     {
         $purchaseOrder->load('details.part');
@@ -205,7 +193,6 @@ class PurchaseOrderController extends Controller
                 'qty_sisa' => (int) ($detail->qty_pesan - $detail->qty_diterima),
             ];
         });
-
         return response()->json($details);
     }
 }
