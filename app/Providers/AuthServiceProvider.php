@@ -151,5 +151,13 @@ class AuthServiceProvider extends ServiceProvider
             return in_array($user->jabatan->singkatan, ['MA']);
         });
 
+        Gate::define('is-not-kepala-gudang', function ($user) {
+            return $user->jabatan->nama_jabatan !== 'Kepala Gudang';
+        });
+
+        Gate::define('is-kepala-gudang-only', function ($user) {
+            return $user->jabatan->nama_jabatan === 'Kepala Gudang';
+        });
+
     }
 }

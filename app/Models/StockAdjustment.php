@@ -21,6 +21,11 @@ class StockAdjustment extends Model
         return $this->belongsTo(Gudang::class);
     }
 
+    public function rak()
+    {
+        return $this->belongsTo(Rak::class);
+    }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');

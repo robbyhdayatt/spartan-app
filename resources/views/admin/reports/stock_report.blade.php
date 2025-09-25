@@ -1,48 +1,49 @@
 @extends('adminlte::page')
 
-@section('title', 'Laporan Stok Keseluruhan')
+@section('title', 'Laporan Stok Rinci')
 
-{{-- 1. Aktifkan plugin DataTables --}}
 @section('plugins.Datatables', true)
 
 @section('content_header')
-    <h1>Laporan Stok Keseluruhan</h1>
+    <h1>Laporan Stok Rinci</h1>
 @stop
 
 @section('content')
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title">Total Stok per Part di Semua Gudang</h3>
+        <h3 class="card-title">Rincian Stok Part di Semua Gudang dan Rak</h3>
     </div>
     <div class="card-body">
-        {{-- 2. Beri ID pada tabel --}}
         <table id="stock-report-table" class="table table-bordered table-striped">
             <thead>
                 <tr>
                     <th>Kode Part</th>
                     <th>Nama Part</th>
-                    <th class="text-right">Total Stok</th>
+                    <th>Gudang</th>
+                    <th>Rak</th>
+                    <th class="text-right">Stok Tersedia</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach($stocks as $stock)
+                {{-- Kita ganti variabelnya menjadi $inventoryDetails --}}
+                @foreach($inventoryDetails as $item)
                 <tr>
-                    <td>{{ $stock->kode_part }}</td>
-                    <td>{{ $stock->nama_part }}</td>
-                    <td class="text-right font-weight-bold">{{ $stock->inventories_sum_quantity ?? 0 }}</td>
+                    <td>{{ $item->part->kode_part ?? 'N/A' }}</td>
+                    <td>{{ $item->part->nama_part ?? 'N/A' }}</td>
+                    <td>{{ $item->gudang->nama_gudang ?? 'N/A' }}</td>
+                    <td>{{ $item->rak->kode_rak ?? 'N/A' }}</td>
+                    <td class="text-right font-weight-bold">{{ $item->quantity }}</td>
                 </tr>
                 @endforeach
             </tbody>
         </table>
     </div>
-    {{-- Hapus card-footer yang berisi ->links() --}}
 </div>
 @stop
 
 @section('js')
 <script>
     $(document).ready(function() {
-        // 3. Inisialisasi DataTables
         $('#stock-report-table').DataTable({
             "responsive": true,
             "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "All"] ],

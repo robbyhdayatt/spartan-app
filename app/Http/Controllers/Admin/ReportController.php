@@ -25,11 +25,22 @@ class ReportController extends Controller
     public function stockCard(Request $request)
     {
         // Ambil semua part dan gudang untuk pilihan dropdown
-        $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
+        $user = Auth::user();
         $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
         $movements = collect(); // Buat koleksi kosong secara default
 
-        // Set default date range ke bulan ini jika tidak ada input
+        // Cek jika user adalah Kepala Gudang
+        if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
+            // Jika ya, paksa pilihan gudang hanya gudangnya sendiri
+            $gudangs = Gudang::where('id', $user->gudang_id)->get();
+        } else {
+            // Jika bukan, tampilkan semua gudang
+            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+        }
+
+        // Ambil semua part untuk pilihan dropdown
+        $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
+
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
 
@@ -45,42 +56,36 @@ class ReportController extends Controller
                 $query->where('gudang_id', $request->gudang_id);
             }
 
-            // PERBAIKAN: Ubah 'latest()' menjadi 'oldest()' untuk urutan kronologis yang benar
+            // Jika yang login Kepala Gudang, paksa filter gudang
+            if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
+                $query->where('gudang_id', $user->gudang_id);
+            }
+
             $movements = $query->oldest()->get();
         }
 
         return view('admin.reports.stock_card', compact('parts', 'gudangs', 'movements', 'startDate', 'endDate'));
     }
 
-
     public function stockByWarehouse(Request $request)
     {
+        // Otorisasi yang sudah kita buat sebelumnya
+        $this->authorize('is-kepala-gudang-only');
+
         $user = Auth::user();
-        $inventoryItems = collect();
-        $selectedGudangId = $request->input('gudang_id');
 
-        // **LOGIKA BARU BERDASARKAN PERAN PENGGUNA**
-        if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
-            // Jika Kepala Gudang, paksa ID gudang sesuai dengan yang ditugaskan
-            $gudangs = Gudang::where('id', $user->gudang_id)->get();
-            $selectedGudangId = $user->gudang_id; // Otomatis pilih gudangnya
-        } else {
-            // Jika Super Admin atau Manajer Area, bisa pilih semua gudang
-            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
-        }
+        // Langsung ambil data inventaris untuk gudang milik user yang login
+        $inventoryItems = Inventory::where('gudang_id', $user->gudang_id)
+            ->with(['part', 'rak'])
+            ->where('quantity', '>', 0)
+            ->get()
+            ->sortBy('part.nama_part');
 
-        // Jika ada gudang yang dipilih (baik dari form atau otomatis), cari datanya
-        if ($selectedGudangId) {
-            $inventoryItems = Inventory::where('gudang_id', $selectedGudangId)
-                ->with(['part', 'rak'])
-                ->where('quantity', '>', 0)
-                ->get()
-                ->sortBy('part.nama_part');
-        }
+        // Kirim nama gudang untuk ditampilkan di judul
+        $gudang = $user->gudang;
 
-        return view('admin.reports.stock_by_warehouse', compact('gudangs', 'inventoryItems'));
+        return view('admin.reports.stock_by_warehouse', compact('inventoryItems', 'gudang'));
     }
-
 
     public function exportStockByWarehouse(Request $request)
     {
@@ -207,11 +212,17 @@ class ReportController extends Controller
             'endDate'
         ));
     }
+
     public function stockReport()
     {
-        $stocks = \App\Models\Part::withSum('inventories', 'quantity')->latest()->get();
-        return view('admin.reports.stock_report', compact('stocks'));
+        $inventoryDetails = Inventory::with(['part', 'gudang', 'rak'])
+            ->where('quantity', '>', 0)
+            ->get()
+            ->sortBy(['part.nama_part', 'gudang.nama_gudang']); // Urutkan berdasarkan nama part, lalu gudang
+
+        return view('admin.reports.stock_report', compact('inventoryDetails'));
     }
+
     public function exportStockCard(Request $request)
     {
         $request->validate([

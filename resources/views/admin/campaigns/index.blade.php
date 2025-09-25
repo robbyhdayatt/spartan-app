@@ -11,7 +11,6 @@
     <div class="card-header">
         <h3 class="card-title">Daftar Campaign Promosi</h3>
         <div class="card-tools">
-            {{-- Tombol ini sekarang membuka modal baru kita --}}
             <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#createCampaignModal">
                 <i class="fas fa-plus"></i> Buat Campaign Baru
             </button>
@@ -49,13 +48,13 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($campaigns as $campaign)
+                {{-- PERUBAHAN 1: Hapus @empty, biarkan @foreach saja. DataTables akan menangani jika kosong. --}}
+                @foreach($campaigns as $campaign)
                 <tr>
                     <td>{{ $campaign->nama_campaign }}</td>
                     <td><span class="badge badge-{{ $campaign->tipe == 'PENJUALAN' ? 'info' : 'warning' }}">{{ $campaign->tipe }}</span></td>
                     <td>{{ $campaign->discount_percentage }}%</td>
                     <td>
-                        {{-- Logika untuk menampilkan cakupan --}}
                         @if($campaign->parts->isEmpty())
                             <span class="badge badge-light">Semua Part</span>
                         @else
@@ -80,9 +79,7 @@
                         </form>
                     </td>
                 </tr>
-                @empty
-                <tr><td colspan="7" class="text-center">Belum ada campaign yang dibuat.</td></tr>
-                @endforelse
+                @endforeach
             </tbody>
         </table>
     </div>
@@ -148,9 +145,11 @@
                     <div class="form-group" id="partSelectionContainer" style="display: none;">
                         <label>Pilih Part</label>
                         <select name="part_ids[]" class="form-control select2" multiple="multiple" style="width: 100%;">
-                            @foreach($parts as $part)
-                                <option value="{{ $part->id }}">{{ $part->nama_part }} ({{$part->kode_part}})</option>
-                            @endforeach
+                            @if($parts->isNotEmpty())
+                                @foreach($parts as $part)
+                                    <option value="{{ $part->id }}">{{ $part->nama_part }} ({{$part->kode_part}})</option>
+                                @endforeach
+                            @endif
                         </select>
                     </div>
                     <hr>
@@ -174,9 +173,11 @@
                     <div class="form-group" id="supplierSelectionContainer" style="display: none;">
                         <label>Pilih Supplier</label>
                         <select name="supplier_ids[]" class="form-control select2" multiple="multiple" style="width: 100%;">
-                             @foreach($suppliers as $supplier)
-                                <option value="{{ $supplier->id }}">{{ $supplier->nama_supplier }}</option>
-                            @endforeach
+                             @if($suppliers->isNotEmpty())
+                                @foreach($suppliers as $supplier)
+                                    <option value="{{ $supplier->id }}">{{ $supplier->nama_supplier }}</option>
+                                @endforeach
+                            @endif
                         </select>
                     </div>
                     </div>
@@ -223,9 +224,11 @@
             <div class="col-md-6 form-group">
                 <label>Pilih Konsumen untuk Kategori ini</label>
                 <select name="categories[__INDEX__][konsumen_ids][]" class="form-control select2-template" multiple="multiple" style="width: 100%;">
-                    @foreach($konsumens as $konsumen)
-                        <option value="{{ $konsumen->id }}">{{ $konsumen->nama_konsumen }}</option>
-                    @endforeach
+                    @if($konsumens->isNotEmpty())
+                        @foreach($konsumens as $konsumen)
+                            <option value="{{ $konsumen->id }}">{{ $konsumen->nama_konsumen }}</option>
+                        @endforeach
+                    @endif
                 </select>
             </div>
         </div>
@@ -240,15 +243,22 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    // Inisialisasi DataTable
-    $('#campaigns-table').DataTable({ "responsive": true });
-
-    // Inisialisasi Select2 pada form utama
+    // --- PERBAIKAN 2: Pindahkan inisialisasi Select2 ke paling atas ---
+    // Inisialisasi Select2 pada form utama di dalam modal
     $('.select2').select2({
         dropdownParent: $('#createCampaignModal')
     });
 
-    // --- LOGIKA FORM DINAMIS ---
+    // Inisialisasi DataTable
+    $('#campaigns-table').DataTable({
+        "responsive": true,
+        // --- PERBAIKAN 3: Tambahkan ini untuk menangani tabel kosong ---
+        "language": {
+            "emptyTable": "Belum ada campaign yang dibuat."
+        }
+    });
+
+    // --- LOGIKA FORM DINAMIS (Tidak ada perubahan di sini) ---
 
     // 1. Mengatur tampilan berdasarkan TIPE campaign (Penjualan/Pembelian)
     function toggleCampaignTypeFields() {
@@ -287,12 +297,9 @@ $(document).ready(function() {
     // 4. Logika untuk menambah KATEGORI DISKON dinamis
     let categoryIndex = 0;
     $('#addCategoryBtn').on('click', function() {
-        // Ambil template HTML
         let template = $('#categoryTemplate').html();
-        // Ganti placeholder __INDEX__ dengan nomor unik
         template = template.replace(/__INDEX__/g, categoryIndex);
 
-        // Tambahkan ke container
         $('#categoryRepeaterContainer').append(template);
 
         // Inisialisasi Select2 untuk elemen yang baru ditambahkan

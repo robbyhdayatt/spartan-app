@@ -17,13 +17,18 @@
         </div>
         <div class="card-body">
             <form action="{{ route('admin.reports.stock-card') }}" method="GET">
+                {{-- PERBAIKAN 1: Logika untuk user Kepala Gudang --}}
+                @php
+                    $user = Auth::user();
+                    $isKepalaGudang = $user->jabatan->nama_jabatan === 'Kepala Gudang';
+                @endphp
                 <div class="row align-items-end">
                     {{-- Filter Part --}}
                     <div class="col-md-4">
                         <div class="form-group">
                             <label>Spare Part</label>
                             <select name="part_id" id="part_id" class="form-control" required>
-                                <option></option> {{-- Option kosong untuk placeholder Select2 --}}
+                                <option></option> {{-- Placeholder --}}
                                 @foreach($parts as $part)
                                     <option value="{{ $part->id }}" {{ request('part_id') == $part->id ? 'selected' : '' }}>
                                         {{ $part->nama_part }} ({{ $part->kode_part }})
@@ -36,19 +41,26 @@
                     {{-- Filter Gudang --}}
                     <div class="col-md-3">
                         <div class="form-group">
-                            <label>Gudang (Opsional)</label>
-                            <select name="gudang_id" id="gudang_id" class="form-control">
-                                <option value="">Semua Gudang</option>
-                                @foreach($gudangs as $gudang)
-                                     <option value="{{ $gudang->id }}" {{ request('gudang_id') == $gudang->id ? 'selected' : '' }}>
-                                        {{ $gudang->nama_gudang }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <label>Gudang</label>
+                            @if($isKepalaGudang)
+                                {{-- Jika Kepala Gudang, tampilkan sebagai teks biasa --}}
+                                <input type="text" class="form-control" value="{{ $user->gudang->nama_gudang }}" readonly>
+                                <input type="hidden" name="gudang_id" value="{{ $user->gudang_id }}">
+                            @else
+                                {{-- Jika bukan, tampilkan dropdown --}}
+                                <select name="gudang_id" id="gudang_id" class="form-control">
+                                    <option value="">Semua Gudang</option>
+                                    @foreach($gudangs as $gudang)
+                                         <option value="{{ $gudang->id }}" {{ request('gudang_id') == $gudang->id ? 'selected' : '' }}>
+                                            {{ $gudang->nama_gudang }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            @endif
                         </div>
                     </div>
 
-                    {{-- Filter Tanggal (diganti jadi input biasa) --}}
+                    {{-- Filter Tanggal --}}
                     <div class="col-md-2">
                         <div class="form-group">
                             <label>Tanggal Mulai</label>
@@ -91,11 +103,10 @@
                     <tr>
                         <th>Tanggal</th>
                         <th>Gudang</th>
-                        <th>Tipe Gerakan</th>
+                        <th>Keterangan</th>
                         <th class="text-right">Jumlah</th>
                         <th class="text-right">Stok Sebelum</th>
                         <th class="text-right">Stok Sesudah</th>
-                        <th>Referensi</th>
                         <th>User</th>
                     </tr>
                 </thead>
@@ -104,18 +115,17 @@
                     <tr>
                         <td>{{ $move->created_at->format('d-m-Y H:i') }}</td>
                         <td>{{ $move->gudang->nama_gudang ?? 'N/A' }}</td>
-                        <td>{{ str_replace('_', ' ', $move->tipe_gerakan) }}</td>
+                        <td>{{ $move->keterangan }}</td>
                         <td class="text-right font-weight-bold {{ $move->jumlah > 0 ? 'text-success' : 'text-danger' }}">
                             {{ ($move->jumlah > 0 ? '+' : '') . $move->jumlah }}
                         </td>
                         <td class="text-right">{{ $move->stok_sebelum }}</td>
                         <td class="text-right">{{ $move->stok_sesudah }}</td>
-                        <td>{{ $move->referensi }}</td>
                         <td>{{ $move->user->nama ?? 'Sistem' }}</td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="text-center">Tidak ada riwayat pergerakan untuk part ini pada periode yang dipilih.</td>
+                        <td colspan="7" class="text-center">Tidak ada riwayat pergerakan untuk part ini pada periode yang dipilih.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -125,6 +135,23 @@
     @endif
 @stop
 
+{{-- PERBAIKAN 2: Tambahkan CSS kustom untuk Select2 --}}
+@push('css')
+<style>
+    .select2-container .select2-selection--single {
+        height: calc(2.25rem + 2px) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5 !important;
+        padding-top: 0.375rem !important;
+        padding-left: 0.75rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px) !important;
+    }
+</style>
+@endpush
+
 @section('js')
 <script>
     $(document).ready(function() {
@@ -132,7 +159,11 @@
         $('#part_id').select2({
             placeholder: "--- Pilih Spare Part ---"
         });
-        $('#gudang_id').select2();
+
+        // Hanya inisialisasi Select2 untuk gudang jika elemennya ada (bukan readonly input)
+        if ($('#gudang_id').is('select')) {
+            $('#gudang_id').select2();
+        }
 
         // Inisialisasi DataTable
         $('#stock-table').DataTable({

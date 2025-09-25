@@ -33,7 +33,13 @@
                     <li class="list-group-item"><b>Gudang Asal:</b> {{ $stockMutation->gudangAsal->nama_gudang }}</li>
                     <li class="list-group-item"><b>Rak Asal:</b> {{ $stockMutation->rakAsal->nama_rak }}</li>
                     <li class="list-group-item"><b>Gudang Tujuan:</b> {{ $stockMutation->gudangTujuan->nama_gudang }}</li>
-                    <li class="list-group-item"><b>Rak Tujuan:</b> {{ $stockMutation->rakTujuan->nama_rak ?? 'Belum Diterima' }}</li>
+                    <li class="list-group-item"><b>Rak Tujuan:</b>
+                        @if($stockMutation->rakTujuan)
+                            {{ $stockMutation->rakTujuan->nama_rak }} ({{ $stockMutation->rakTujuan->kode_rak }})
+                        @else
+                            Belum Diterima
+                        @endif
+                    </li>
                 </ul>
             </div>
         </div>

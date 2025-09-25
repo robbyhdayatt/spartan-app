@@ -189,16 +189,28 @@ $(document).ready(function() {
         }).fail(() => alert("Gagal memuat data part."));
     }
 
+    function recalculateAllRows() {
+        itemsTable.find('tr').each(function() {
+            let row = $(this);
+            let partSelect = row.find('.item-part');
+            if (partSelect.val()) {
+                // Memicu event 'change' pada part select akan menjalankan ulang AJAX
+                partSelect.trigger('change');
+            }
+        });
+    }
+
     // --- EVENT LISTENERS ---
 
     // Jika Gudang atau Konsumen berubah
-    gudangSelect.add(konsumenSelect).on('change', function() {
+    gudangSelect.on('change', function() {
         toggleAddItemButton();
-        const currentGudang = gudangSelect.val();
-        // Jika gudang berubah, reset tabel dan muat ulang parts
-        if ($(this).is('#gudang-select')) {
-             loadParts(currentGudang);
-        }
+        loadParts($(this).val());
+    });
+    konsumenSelect.on('change', function() {
+        toggleAddItemButton();
+        // Saat konsumen diganti, hitung ulang semua baris yang sudah ada
+        recalculateAllRows();
     });
 
     // Tambah baris item baru

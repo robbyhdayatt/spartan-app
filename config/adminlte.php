@@ -387,12 +387,12 @@ return [
             'can'     => 'view-reports',
             'submenu' => [
                 ['text' => 'Kartu Stok', 'route' => 'admin.reports.stock-card'],
-                ['text' => 'Stok per Gudang', 'route' => 'admin.reports.stock-by-warehouse'],
+                ['text' => 'Stok Gudang', 'route' => 'admin.reports.stock-by-warehouse', 'can' => 'is-kepala-gudang-only'],
                 ['text' => 'Jurnal Penjualan', 'route' => 'admin.reports.sales-journal'],
                 ['text' => 'Jurnal Pembelian', 'route' => 'admin.reports.purchase-journal'],
                 ['text' => 'Nilai Persediaan', 'route' => 'admin.reports.inventory-value'],
                 ['text' => 'Analisis Penjualan', 'route' => 'admin.reports.sales-purchase-analysis'],
-                ['text' => 'Laporan Stok Keseluruhan', 'route' => 'admin.reports.stock-report'],
+                ['text' => 'Laporan Stok Keseluruhan', 'route' => 'admin.reports.stock-report', 'can' => 'is-not-kepala-gudang'],
             ],
         ],
 

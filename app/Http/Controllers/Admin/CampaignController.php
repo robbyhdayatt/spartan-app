@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class CampaignController extends Controller
 {
-    // ... (fungsi index() dan store() yang sudah ada tetap sama) ...
     public function index()
     {
         $campaigns = Campaign::with(['parts', 'suppliers'])->latest()->get();

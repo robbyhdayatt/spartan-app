@@ -45,7 +45,8 @@ class MutationReceivingController extends Controller
         $mutation->load(['part', 'gudangAsal', 'rakAsal', 'createdBy', 'approvedBy']);
         $raks = Rak::where('gudang_id', $mutation->gudang_tujuan_id)
                     ->where('is_active', true)
-                    ->orderBy('nama_rak')
+                    ->where('tipe_rak', 'PENYIMPANAN')
+                    ->orderBy('kode_rak')
                     ->get();
 
         return view('admin.mutation_receiving.show', compact('mutation', 'raks'));
