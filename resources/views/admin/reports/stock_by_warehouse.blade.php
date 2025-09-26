@@ -1,24 +1,69 @@
 @extends('adminlte::page')
 
-@section('title', 'Laporan Stok Gudang')
+@section('title', 'Laporan Stok per Gudang')
 
 @section('plugins.Datatables', true)
+@section('plugins.Select2', true)
 
 @section('content_header')
-    {{-- Judul sekarang dinamis menampilkan nama gudang --}}
-    <h1>Laporan Stok: {{ $gudang->nama_gudang }}</h1>
+    <h1>Laporan Stok per Gudang</h1>
 @stop
 
 @section('content')
+@php
+    $isKepalaGudang = Auth::user()->jabatan->nama_jabatan === 'Kepala Gudang';
+@endphp
+
+<div class="card">
+    {{-- Form Filter hanya ditampilkan jika BUKAN Kepala Gudang --}}
+    @unless($isKepalaGudang)
+    <div class="card-header">
+        <h3 class="card-title">Filter Laporan</h3>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="{{ route('admin.reports.stock-by-warehouse') }}">
+            <div class="row align-items-end">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="gudang_id">Pilih Gudang</label>
+                        <select name="gudang_id" id="gudang_id" class="form-control select2" required>
+                            <option value="">-- Pilih Gudang --</option>
+                            @foreach ($gudangs as $gudang)
+                                <option value="{{ $gudang->id }}" {{ optional($selectedGudang)->id == $gudang->id ? 'selected' : '' }}>
+                                    {{ $gudang->nama_gudang }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Tampilkan</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    @endunless
+</div>
+
+{{-- Tabel Hasil akan ditampilkan jika ada data atau jika login sebagai Kepala Gudang --}}
+@if($inventoryItems->isNotEmpty() || $isKepalaGudang)
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title">Rincian Stok Part Tersedia</h3>
+        <h3 class="card-title">
+            Rincian Stok Part Tersedia
+            @if($selectedGudang)
+                di {{ $selectedGudang->nama_gudang }}
+            @endif
+        </h3>
+        @if($selectedGudang)
         <div class="card-tools">
-            {{-- Tombol Export sekarang lebih sederhana --}}
-            <a href="{{ route('admin.reports.stock-by-warehouse.export', ['gudang_id' => $gudang->id]) }}" class="btn btn-sm btn-success">
+            <a href="{{ route('admin.reports.stock-by-warehouse.export', ['gudang_id' => $selectedGudang->id]) }}" class="btn btn-sm btn-success">
                 <i class="fas fa-file-excel"></i> Export
             </a>
         </div>
+        @endif
     </div>
     <div class="card-body">
         @if($inventoryItems->isNotEmpty())
@@ -49,15 +94,35 @@
                 </tbody>
             </table>
         @else
-            <p class="text-center mt-4">Tidak ada data stok untuk gudang Anda saat ini.</p>
+            <p class="text-center mt-4">Tidak ada data stok untuk gudang ini.</p>
         @endif
     </div>
 </div>
+@endif
+
 @stop
+
+@push('css')
+<style>
+    /* Menyesuaikan tinggi Select2 agar sama dengan input form lainnya */
+    .select2-container .select2-selection--single {
+        height: calc(2.25rem + 2px) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5 !important;
+        padding-left: .75rem !important;
+        padding-top: .375rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px) !important;
+    }
+</style>
+@endpush
 
 @section('js')
 <script>
     $(document).ready(function() {
+        $('.select2').select2();
         $('#stock-table').DataTable({
             "responsive": true,
             "lengthChange": true,

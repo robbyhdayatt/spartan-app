@@ -69,22 +69,34 @@ class ReportController extends Controller
 
     public function stockByWarehouse(Request $request)
     {
-        // Otorisasi yang sudah kita buat sebelumnya
-        $this->authorize('is-kepala-gudang-only');
-
         $user = Auth::user();
+        $inventoryItems = collect();
+        $gudangs = collect();
+        $selectedGudang = null;
 
-        // Langsung ambil data inventaris untuk gudang milik user yang login
-        $inventoryItems = Inventory::where('gudang_id', $user->gudang_id)
-            ->with(['part', 'rak'])
-            ->where('quantity', '>', 0)
-            ->get()
-            ->sortBy('part.nama_part');
+        if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
+            // Jika Kepala Gudang, paksa filter dan langsung tampilkan data
+            $gudangs = Gudang::where('id', $user->gudang_id)->get();
+            $selectedGudang = $user->gudang;
+            $inventoryItems = Inventory::where('gudang_id', $user->gudang_id)
+                ->with(['part', 'rak'])
+                ->where('quantity', '>', 0)
+                ->get()
+                ->sortBy('part.nama_part');
+        } else {
+            // Jika Super Admin atau Manajer, izinkan memilih dari dropdown
+            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+            if ($request->filled('gudang_id')) {
+                $selectedGudang = Gudang::find($request->gudang_id);
+                $inventoryItems = Inventory::where('gudang_id', $request->gudang_id)
+                    ->with(['part', 'rak'])
+                    ->where('quantity', '>', 0)
+                    ->get()
+                    ->sortBy('part.nama_part');
+            }
+        }
 
-        // Kirim nama gudang untuk ditampilkan di judul
-        $gudang = $user->gudang;
-
-        return view('admin.reports.stock_by_warehouse', compact('inventoryItems', 'gudang'));
+        return view('admin.reports.stock_by_warehouse', compact('inventoryItems', 'gudangs', 'selectedGudang'));
     }
 
     public function exportStockByWarehouse(Request $request)

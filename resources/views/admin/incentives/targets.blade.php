@@ -23,7 +23,11 @@
                         @endfor
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end"><button type="submit" class="btn btn-primary" style="width: 100%;">Tampilkan</button></div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>&nbsp;</label> <button type="submit" class="btn btn-primary btn-block">Tampilkan</button>
+                    </div>
+                </div>
             </div>
         </form>
     </div>

@@ -22,6 +22,18 @@ class CampaignController extends Controller
         return view('admin.campaigns.index', compact('campaigns', 'parts', 'suppliers', 'konsumens'));
     }
 
+    public function create()
+    {
+        $this->authorize('is-manager');
+
+        // Ambil semua data yang dibutuhkan untuk dropdown di form
+        $parts = Part::where('is_active', true)->orderBy('nama_part')->get();
+        $suppliers = Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
+        $konsumens = Konsumen::where('is_active', true)->orderBy('nama_konsumen')->get();
+
+        return view('admin.campaigns.create', compact('parts', 'suppliers', 'konsumens'));
+    }
+
     public function store(Request $request)
     {
         $this->authorize('is-manager');

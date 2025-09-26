@@ -194,6 +194,24 @@
     </div>
 @stop
 
+{{-- ==================== BAGIAN PERBAIKAN ==================== --}}
+@push('css')
+<style>
+    /* Menyesuaikan tinggi Select2 agar sama dengan input form lainnya */
+    .select2-container .select2-selection--single {
+        height: calc(2.25rem + 2px) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5 !important;
+        padding-left: .75rem !important;
+        padding-top: .375rem !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(2.25rem + 2px) !important;
+    }
+</style>
+@endpush
+
 @section('js')
 <script>
     $(document).ready(function() {
@@ -209,11 +227,9 @@
             var tipe_rak = $(this).data('tipe_rak');
             var is_active = $(this).data('is_active');
 
-            // Set action URL
             var url = "{{ url('admin/raks') }}/" + id;
             $('#editForm').attr('action', url);
 
-            // Isi nilai-nilai form
             $('#edit_gudang_id').val(gudang_id);
             $('#edit_tipe_rak').val(tipe_rak);
             $('#edit_kode_rak').val(kode_rak);
@@ -229,7 +245,7 @@
 
         // Jika ada error validasi, buka kembali modal yang sesuai
         @if ($errors->any())
-            @if (old('id')) // Ini perlu disesuaikan jika Anda ingin menangani error edit
+            @if (old('id'))
                 $('#editModal').modal('show');
             @else
                 $('#createModal').modal('show');
