@@ -359,6 +359,7 @@ return [
                 ['text' => 'Penjualan', 'route' => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => 'view-sales'],
                 ['text' => 'Retur Penjualan', 'route' => 'admin.sales-returns.index', 'icon' => 'fas fa-fw fa-undo', 'can' => 'view-sales-returns'],
                 ['text' => 'Konsumen', 'route' => 'admin.konsumens.index', 'icon' => 'fas fa-fw fa-address-book', 'can' => ['is-super-admin', 'is-sales']],
+                ['text' => 'Kategori Diskon Konsumen', 'route' => 'admin.customer-discount-categories.index', 'icon' => 'fas fa-fw fa-tags', 'can' => 'is-manager'],
             ],
         ],
 
@@ -474,6 +475,11 @@ return [
                     'type' => 'css',
                     'asset' => false,
                     'location' => '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.css',
+                ],
+                [
+                    'type' => 'css',
+                    'asset' => true, // Ganti dari false ke true jika sebelumnya false
+                    'location' => 'vendor/select2-bootstrap4-theme/select2-bootstrap4.min.css',
                 ],
             ],
         ],

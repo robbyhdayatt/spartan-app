@@ -13,13 +13,12 @@ use App\Models\Jabatan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Services\DiscountService; // <-- IMPORT SERVICE KITA
+use App\Services\DiscountService;
 
 class PenjualanController extends Controller
 {
     protected $discountService;
 
-    // 1. Inject DiscountService melalui Constructor
     public function __construct(DiscountService $discountService)
     {
         $this->discountService = $discountService;
@@ -50,62 +49,11 @@ class PenjualanController extends Controller
         return view('admin.penjualans.create', compact('konsumens', 'gudangs', 'salesUsers'));
     }
 
-    // API: (TIDAK BERUBAH) - Hanya mengambil daftar part yang ada stok
-    public function getPartsByGudang(Gudang $gudang)
-    {
-        $partIdsInStock = Inventory::where('gudang_id', $gudang->id)
-            ->where('quantity', '>', 0)
-            ->pluck('part_id')
-            ->unique();
-
-        if ($partIdsInStock->isEmpty()) {
-            return response()->json([]);
-        }
-
-        $parts = Part::whereIn('id', $partIdsInStock)
-            ->select('id', 'nama_part', 'kode_part', 'harga_jual_default') // Ambil harga default
-            ->orderBy('nama_part')
-            ->get();
-
-        return response()->json($parts);
-    }
-
-    // 2. MODIFIKASI API: getPartStockDetails sekarang memanggil DiscountService
-    public function getPartStockDetails(Part $part, Request $request)
-    {
-        $validated = $request->validate([
-            'gudang_id' => 'required|exists:gudangs,id',
-            'konsumen_id' => 'required|exists:konsumens,id', // Konsumen sekarang wajib ada
-        ]);
-
-        $konsumen = Konsumen::find($validated['konsumen_id']);
-
-        $stockDetails = Inventory::join('raks', 'inventories.rak_id', '=', 'raks.id')
-            ->where('inventories.part_id', $part->id)
-            ->where('inventories.gudang_id', $validated['gudang_id'])
-            ->where('inventories.quantity', '>', 0)
-            ->where('raks.tipe_rak', 'PENYIMPANAN')
-            ->select('inventories.id as inventory_id', 'inventories.quantity', 'raks.id as rak_id', 'raks.nama_rak')
-            ->get();
-
-        if ($stockDetails->isEmpty()) {
-            return response()->json(['error' => 'Stok siap jual tidak ditemukan di gudang yang dipilih.'], 404);
-        }
-
-        // Panggil DiscountService untuk kalkulasi harga
-        $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $part->harga_jual_default);
-
-        return response()->json([
-            'stock_details' => $stockDetails,
-            'discount_result' => $discountResult, // Kirim semua hasil kalkulasi ke frontend
-        ]);
-    }
-
-    // 3. MODIFIKASI BESAR: store() sekarang menghitung ulang semua harga di server
     public function store(Request $request)
     {
         $this->authorize('manage-sales');
 
+        // Menggunakan 'items' dari kode lama Anda, bukan 'parts'
         $validated = $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
             'konsumen_id' => 'required|exists:konsumens,id',
@@ -114,21 +62,25 @@ class PenjualanController extends Controller
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.rak_id' => 'required|exists:raks,id',
             'items.*.qty' => 'required|integer|min:1',
-            // Harga tidak lagi divalidasi, karena akan dihitung ulang
+            'total_diskon' => 'nullable|numeric|min:0', // Dibuat nullable untuk keamanan
+            'subtotal' => 'required|numeric|min:0',
+            'pajak' => 'required|numeric|min:0',
+            'total_harga' => 'required|numeric|min:0',
         ]);
 
         DB::beginTransaction();
         try {
             $konsumen = Konsumen::find($validated['konsumen_id']);
-            $totalSubtotal = 0;
+            $totalSubtotalServer = 0;
+            $totalDiskonServer = 0;
 
-            // Buat header penjualan terlebih dahulu, total akan diupdate nanti
+            // Buat header penjualan terlebih dahulu
             $penjualan = Penjualan::create([
                 'nomor_faktur' => Penjualan::generateNomorFaktur(),
                 'tanggal_jual' => $validated['tanggal_jual'],
                 'gudang_id' => $validated['gudang_id'],
                 'konsumen_id' => $validated['konsumen_id'],
-                'sales_id' => auth()->id(), // Asumsi sales adalah user yang login
+                'sales_id' => auth()->id(),
                 'created_by' => auth()->id(),
             ]);
 
@@ -136,13 +88,15 @@ class PenjualanController extends Controller
                 $part = Part::find($item['part_id']);
                 $qty = (int)$item['qty'];
 
-                // HITUNG ULANG HARGA DI SERVER MENGGUNAKAN SERVICE
+                // Hitung ulang harga di sisi server untuk keamanan
                 $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $part->harga_jual_default);
                 $finalPrice = $discountResult['final_price'];
                 $itemSubtotal = $finalPrice * $qty;
-                $totalSubtotal += $itemSubtotal;
+                
+                $totalSubtotalServer += $itemSubtotal;
+                $totalDiskonServer += ($part->harga_jual_default - $finalPrice) * $qty;
 
-                // Cek dan kurangi stok dari inventory
+                // Cek & Kurangi Stok
                 $inventory = Inventory::where('rak_id', $item['rak_id'])->where('part_id', $part->id)->first();
                 if (!$inventory || $inventory->quantity < $qty) {
                     throw new \Exception("Stok tidak mencukupi untuk part '{$part->nama_part}' di rak yang dipilih.");
@@ -150,17 +104,16 @@ class PenjualanController extends Controller
                 $stokSebelum = $inventory->quantity;
                 $inventory->decrement('quantity', $qty);
 
-                // Buat detail penjualan dengan harga yang sudah divalidasi server
+                // Buat Detail Penjualan
                 $penjualan->details()->create([
                     'part_id' => $part->id,
                     'rak_id' => $item['rak_id'],
                     'qty_jual' => $qty,
-                    'harga_jual' => $finalPrice, // Gunakan harga final dari service
-                    'harga_awal' => $part->harga_jual_default, // Simpan harga asli untuk referensi
+                    'harga_jual' => $finalPrice,
                     'subtotal' => $itemSubtotal,
                 ]);
 
-                // Catat pergerakan stok
+                // Buat Stock Movement
                 $penjualan->stockMovements()->create([
                     'part_id' => $part->id,
                     'gudang_id' => $penjualan->gudang_id,
@@ -173,23 +126,24 @@ class PenjualanController extends Controller
                 ]);
             }
 
-            // Hitung pajak dan total akhir berdasarkan subtotal yang sudah dihitung ulang
-            $pajak = 0; // Logika PPN bisa ditambahkan di sini jika perlu
-            $totalHarga = $totalSubtotal + $pajak;
+            // Hitung Pajak & Total Akhir
+            $pajak = $totalSubtotalServer * 0.11;
+            $totalHarga = $totalSubtotalServer + $pajak;
 
-            // Update header penjualan dengan total yang benar
+            // Update header penjualan dengan total final yang dihitung di server
             $penjualan->update([
-                'subtotal' => $totalSubtotal,
+                'subtotal' => $totalSubtotalServer,
+                'total_diskon' => $totalDiskonServer,
                 'pajak' => $pajak,
                 'total_harga' => $totalHarga,
             ]);
 
             DB::commit();
-            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan berhasil disimpan dengan harga terverifikasi.');
+            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan berhasil disimpan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan saat menyimpan: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
         }
     }
 
@@ -206,7 +160,49 @@ class PenjualanController extends Controller
         $penjualan->load(['konsumen', 'gudang', 'sales', 'details.part']);
         return view('admin.penjualans.print', compact('penjualan'));
     }
+    
+    // --- API Methods ---
 
+    public function getPartsByGudang(Gudang $gudang)
+    {
+        $partIdsInStock = Inventory::where('gudang_id', $gudang->id)
+            ->where('quantity', '>', 0)
+            ->pluck('part_id')
+            ->unique();
+
+        if ($partIdsInStock->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $parts = Part::whereIn('id', $partIdsInStock)
+            ->select('id', 'nama_part', 'kode_part', 'harga_jual_default')
+            ->orderBy('nama_part')
+            ->get();
+
+        return response()->json($parts);
+    }
+
+    public function getPartStockDetails(Part $part, Request $request)
+    {
+        $validated = $request->validate([
+            'gudang_id' => 'required|exists:gudangs,id',
+        ]);
+
+        $stockDetails = Inventory::join('raks', 'inventories.rak_id', '=', 'raks.id')
+            ->where('inventories.part_id', $part->id)
+            ->where('inventories.gudang_id', $validated['gudang_id'])
+            ->where('inventories.quantity', '>', 0)
+            ->where('raks.tipe_rak', 'PENYIMPANAN')
+            ->select('inventories.id as inventory_id', 'inventories.quantity', 'raks.id as rak_id', 'raks.kode_rak', 'raks.nama_rak')
+            ->get();
+
+        if ($stockDetails->isEmpty()) {
+            return response()->json(['error' => 'Stok siap jual tidak ditemukan di gudang yang dipilih.'], 404);
+        }
+
+        return response()->json($stockDetails);
+    }
+    
     public function getDetails($id)
     {
         $penjualan = \App\Models\Penjualan::with('details.part')->find($id);
@@ -214,5 +210,30 @@ class PenjualanController extends Controller
             return response()->json(['error' => 'Faktur tidak ditemukan'], 404);
         }
         return response()->json($penjualan->details);
+    }
+
+    public function calculateDiscount(Request $request)
+    {
+        $request->validate([
+            'part_id' => 'required|exists:parts,id',
+            'konsumen_id' => 'required|exists:konsumens,id',
+        ]);
+
+        try {
+            $part = Part::findOrFail($request->part_id);
+            $konsumen = Konsumen::findOrFail($request->konsumen_id);
+            $basePrice = $part->harga_jual_default;
+            $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $basePrice);
+
+            return response()->json([
+                'success' => true,
+                'data' => $discountResult
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghitung diskon: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

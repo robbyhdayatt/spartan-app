@@ -21,62 +21,51 @@ class DiscountService
     public function calculateSalesDiscount(Part $part, Konsumen $konsumen, float $basePrice): array
     {
         $today = Carbon::today();
-        $applicableDiscounts = collect();
         $finalPrice = $basePrice;
+        $appliedSteps = ['Harga awal: ' . number_format($basePrice, 2)];
+        $appliedDiscounts = [];
 
-        // 1. Cari semua campaign Penjualan yang aktif dan relevan
+        // 1. Ambil Campaign Penjualan Utama yang Berlaku
         $activeCampaigns = Campaign::where('tipe', 'PENJUALAN')
             ->where('is_active', true)
             ->where('tanggal_mulai', '<=', $today)
             ->where('tanggal_selesai', '>=', $today)
-            ->with(['parts', 'categories.konsumens']) // Eager load relasi untuk performa
+            ->with('parts')
             ->get();
 
         foreach ($activeCampaigns as $campaign) {
-            // Cek apakah campaign ini berlaku untuk part ini
-            // Jika relasi 'parts' kosong, artinya berlaku untuk semua part.
-            // Jika tidak kosong, cek apakah part_id ada di dalamnya.
             $partIsEligible = $campaign->parts->isEmpty() || $campaign->parts->contains($part->id);
 
-            if ($partIsEligible) {
-                // Tambahkan diskon utama dari campaign
-                $applicableDiscounts->push([
-                    'name' => $campaign->nama_campaign,
-                    'percentage' => $campaign->discount_percentage,
-                ]);
-
-                // Cek kategori diskon tambahan
-                foreach ($campaign->categories as $category) {
-                    // Cek apakah konsumen ini termasuk dalam kategori
-                    if ($category->konsumens->contains($konsumen->id)) {
-                        $applicableDiscounts->push([
-                            'name' => $category->nama_kategori,
-                            'percentage' => $category->discount_percentage,
-                        ]);
-                    }
-                }
+            if ($partIsEligible && $campaign->discount_percentage > 0) {
+                $discountAmount = $finalPrice * ($campaign->discount_percentage / 100);
+                $finalPrice -= $discountAmount;
+                $appliedDiscounts[] = $campaign->nama_campaign;
+                $appliedSteps[] = "Diskon campaign '{$campaign->nama_campaign}' ({$campaign->discount_percentage}%) diterapkan. Harga menjadi: " . number_format($finalPrice, 2);
             }
         }
 
-        // 2. Terapkan diskon secara berantai (multiplicative)
-        $appliedSteps = [];
-        $discounts = $applicableDiscounts->where('percentage', '>', 0)->unique('name');
+        // 2. Ambil Kategori Diskon Konsumen yang Berlaku
+        $customerDiscountCategories = $konsumen->customerDiscountCategories()
+            ->where('is_active', true)
+            ->get();
 
-        foreach ($discounts as $discount) {
-            $discountAmount = $finalPrice * ($discount['percentage'] / 100);
-            $finalPrice -= $discountAmount;
-            $appliedSteps[] = "Diskon '{$discount['name']}' ({$discount['percentage']}%) diterapkan. Harga menjadi: " . number_format($finalPrice, 2);
+        foreach ($customerDiscountCategories as $category) {
+            if ($category->discount_percentage > 0) {
+                $discountAmount = $finalPrice * ($category->discount_percentage / 100);
+                $finalPrice -= $discountAmount;
+                $appliedDiscounts[] = $category->nama_kategori;
+                $appliedSteps[] = "Diskon kategori konsumen '{$category->nama_kategori}' ({$category->discount_percentage}%) diterapkan. Harga menjadi: " . number_format($finalPrice, 2);
+            }
         }
 
-        // 3. Kembalikan hasil kalkulasi
         return [
             'original_price' => $basePrice,
             'final_price' => $finalPrice,
-            'total_discount_percentage' => $discounts->sum('percentage'), // Ini hanya untuk tampilan, bukan untuk kalkulasi
-            'applied_discounts' => $discounts->pluck('name')->all(),
+            'applied_discounts' => $appliedDiscounts,
             'calculation_steps' => $appliedSteps,
         ];
     }
+
 
     /**
      * Menghitung harga beli final setelah diskon campaign diterapkan.
