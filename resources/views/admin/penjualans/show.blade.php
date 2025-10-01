@@ -3,106 +3,100 @@
 @section('title', 'Detail Penjualan')
 
 @section('content_header')
-    <h1>Detail Penjualan: {{ $penjualan->nomor_faktur }}</h1>
+    <h1>Detail Faktur: {{ $penjualan->nomor_faktur }}</h1>
 @stop
 
 @section('content')
-<div class="invoice p-3 mb-3">
-    <div class="row">
-        <div class="col-12">
-            <h4>
-                <i class="fas fa-file-invoice"></i> SpartanApp
-                <small class="float-right">Tanggal Jual: {{ \Carbon\Carbon::parse($penjualan->tanggal_jual)->format('d/m/Y') }}</small>
-            </h4>
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Informasi Transaksi</h3>
+        <div class="card-tools">
+            <a href="{{ route('admin.penjualans.print', $penjualan) }}" target="_blank" class="btn btn-info btn-sm"><i class="fas fa-print"></i> Cetak</a>
+            <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary btn-sm">Kembali ke Daftar</a>
         </div>
     </div>
-    <div class="row invoice-info">
-        <div class="col-sm-4 invoice-col">
-            Dari
-            <address>
-            <address>
-                {{-- GANTI DENGAN INFO PERUSAHAAN ANDA --}}
-                <strong>PT. Lautan Teduh Interniaga</strong><br>
-                Jl. Ikan Tenggiri, Pesawahan, Kec. Telukbetung Selatan<br>
-                Bandar Lampung, Indonesia<br>
-                Phone: 0812-2000-4367<br>
-                Website: www.yamaha-lampung.com
-            </address>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Nomor Faktur:</strong><br>
+                {{ $penjualan->nomor_faktur }}
+            </div>
+            <div class="col-md-4">
+                <strong>Tanggal Jual:</strong><br>
+                {{ $penjualan->tanggal_jual->format('d F Y') }}
+            </div>
+            <div class="col-md-4">
+                <strong>Sales:</strong><br>
+                {{ $penjualan->sales->nama ?? 'N/A' }}
+            </div>
         </div>
-        <div class="col-sm-4 invoice-col">
-            Kepada
-            <address>
-                <strong>{{ $penjualan->konsumen->nama_konsumen }}</strong><br>
-                {{ $penjualan->konsumen->alamat }}<br>
-                Phone: {{ $penjualan->konsumen->telepon }}<br>
-                Email: {{ $penjualan->konsumen->email }}
-            </address>
+        <hr>
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Konsumen:</strong><br>
+                {{ $penjualan->konsumen->nama_konsumen }}
+            </div>
+            <div class="col-md-4">
+                <strong>Gudang:</strong><br>
+                {{ $penjualan->gudang->nama_gudang }}
+            </div>
         </div>
-        <div class="col-sm-4 invoice-col">
-            <b>Nomor Faktur:</b> {{ $penjualan->nomor_faktur }}<br>
-            <b>Sales:</b> {{ $penjualan->sales->name ?? 'N/A' }}<br>
-            <b>Tanggal Dibuat:</b> {{ $penjualan->created_at->format('d/m/Y') }}
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12 table-responsive">
-            <table class="table table-striped">
+        <hr>
+
+        <h4>Detail Item</h4>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
-                        <th>Qty</th>
-                        <th>Part</th>
+                        <th>No.</th>
                         <th>Kode Part</th>
-                        <th>Rak</th>
-                        <th>Harga Satuan</th>
-                        <th>Subtotal</th>
+                        <th>Nama Part</th>
+                        <th>Qty</th>
+                        <th class="text-right">Harga Satuan</th>
+                        <th class="text-right">Subtotal</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($penjualan->details as $detail)
                     <tr>
-                        <td>{{ $detail->qty_jual }}</td>
-                        <td>{{ $detail->part->nama_part }}</td>
+                        <td>{{ $loop->iteration }}</td>
                         <td>{{ $detail->part->kode_part }}</td>
-                        <td>{{ $detail->rak->kode_rak }}</td>
-                        <td>{{ 'Rp ' . number_format($detail->harga_jual, 0, ',', '.') }}</td>
-                        <td>{{ 'Rp ' . number_format($detail->subtotal, 0, ',', '.') }}</td>
+                        <td>{{ $detail->part->nama_part }}</td>
+                        <td>{{ $detail->qty_jual }}</td>
+                        <td class="text-right">@rupiah($detail->harga_jual)</td>
+                        <td class="text-right">@rupiah($detail->subtotal)</td>
                     </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-6">
-            {{-- Bisa diisi dengan metode pembayaran atau catatan lain --}}
-        </div>
-        <div class="col-6">
-            <p class="lead">Detail Pembayaran</p>
-            <div class="table-responsive">
-                <table class="table">
-                    <tr>
-                        <th style="width:50%">Subtotal:</th>
-                        <td>{{ 'Rp ' . number_format($penjualan->subtotal, 0, ',', '.') }}</td>
-                    </tr>
-                    <tr>
-                        <th>PPN (11%):</th>
-                        <td>{{ 'Rp ' . number_format($penjualan->pajak, 0, ',', '.') }}</td>
-                    </tr>
-                    <tr>
-                        <th>Grand Total:</th>
-                        <td><strong>{{ 'Rp ' . number_format($penjualan->total_harga, 0, ',', '.') }}</strong></td>
-                    </tr>
-                </table>
+
+        <div class="row mt-4">
+            <div class="col-md-6 offset-md-6">
+                <div class="table-responsive">
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <th style="width:50%">Subtotal:</th>
+                                <td class="text-right">@rupiah($penjualan->subtotal)</td>
+                            </tr>
+                            {{-- BARIS BARU UNTUK DISKON --}}
+                            <tr>
+                                <th>Total Diskon:</th>
+                                <td class="text-right text-success">@rupiah($penjualan->total_diskon)</td>
+                            </tr>
+                            <tr>
+                                <th>PPN (11%):</th>
+                                <td class="text-right">@rupiah($penjualan->pajak)</td>
+                            </tr>
+                            <tr>
+                                <th>Total Keseluruhan:</th>
+                                <td class="text-right h4"><strong>@rupiah($penjualan->total_harga)</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <div class="row no-print">
-        <div class="col-12">
-            <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
-
-            {{-- !! TAMBAHKAN TOMBOL INI !! --}}
-            <a href="{{ route('admin.penjualans.print', $penjualan) }}" rel="noopener" target="_blank" class="btn btn-info float-right"><i class="fas fa-print"></i> Cetak Invoice</a>
         </div>
     </div>
 </div>

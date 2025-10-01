@@ -52,4 +52,9 @@ class Campaign extends Model
     {
         return $this->belongsToMany(Supplier::class, 'campaign_supplier');
     }
+
+    public function konsumens()
+    {
+        return $this->belongsToMany(Konsumen::class, 'campaign_konsumen');
+    }
 }

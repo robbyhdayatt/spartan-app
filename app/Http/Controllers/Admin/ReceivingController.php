@@ -15,16 +15,13 @@ class ReceivingController extends Controller
     {
         $user = Auth::user();
 
-        // Memulai query dasar
         $query = \App\Models\Receiving::with(['purchaseOrder', 'gudang', 'receivedBy']);
 
-        // Terapkan filter gudang berdasarkan peran
         if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
 
-        // Ambil data setelah difilter dan diurutkan
-        $receivings = $query->latest()->paginate(15); // Menggunakan paginate untuk halaman yang lebih rapi
+        $receivings = $query->latest()->paginate(15);
 
         return view('admin.receivings.index', compact('receivings'));
     }
@@ -35,10 +32,11 @@ class ReceivingController extends Controller
 
         $user = Auth::user();
 
-        // Memulai query untuk mengambil PO yang statusnya APPROVED
-        $query = PurchaseOrder::where('status', 'APPROVED');
+        // --- PERBAIKAN LOGIKA DI SINI ---
+        // Sekarang mengambil PO yang statusnya 'APPROVED' atau 'PARTIALLY_RECEIVED'
+        $query = PurchaseOrder::whereIn('status', ['APPROVED', 'PARTIALLY_RECEIVED']);
+        // --- END PERBAIKAN ---
 
-        // Terapkan filter gudang HANYA jika user BUKAN Super Admin atau Manajer Area
         if (!in_array($user->jabatan->singkatan, ['SA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
@@ -48,10 +46,8 @@ class ReceivingController extends Controller
         return view('admin.receivings.create', compact('purchaseOrders'));
     }
 
-    // API endpoint to fetch PO details for the form
     public function getPoDetails(PurchaseOrder $purchaseOrder)
     {
-        // Eager load relasi yang dibutuhkan (details dan part di dalamnya)
         $purchaseOrder->load('details.part');
         return response()->json($purchaseOrder);
     }
@@ -71,7 +67,6 @@ class ReceivingController extends Controller
         try {
             $po = PurchaseOrder::with('details')->findOrFail($request->purchase_order_id);
 
-            // Create the Receiving Header (with the call to the private method)
             $receiving = Receiving::create([
                 'purchase_order_id' => $po->id,
                 'gudang_id' => $po->gudang_id,
@@ -82,27 +77,21 @@ class ReceivingController extends Controller
                 'received_by' => Auth::id(),
             ]);
 
-            // Loop through items to create receiving details and update PO details
             foreach ($request->items as $partId => $itemData) {
-                // Find the corresponding detail line in the Purchase Order
                 $poDetail = $po->details->firstWhere('part_id', $partId);
 
                 if ($poDetail) {
-                    // Add the received quantity to the PO detail
                     $poDetail->qty_diterima += $itemData['qty_terima'];
                     $poDetail->save();
                 }
 
-                // Create the receiving detail line
                 $receiving->details()->create([
                     'part_id' => $partId,
                     'qty_terima' => $itemData['qty_terima'],
                 ]);
             }
 
-            // Check if the PO is now fully or partially received
             $fullyReceived = true;
-            // We need to refresh the PO details from the database to get the latest counts
             $po->refresh();
             foreach ($po->details as $detail) {
                 if ($detail->qty_diterima < $detail->qty_pesan) {
@@ -125,8 +114,7 @@ class ReceivingController extends Controller
 
     public function show(Receiving $receiving)
     {
-        // Tambahkan 'createdBy' ke dalam list load
-        $receiving->load('purchaseOrder.supplier', 'details.part', 'createdBy');
+        $receiving->load('purchaseOrder.supplier', 'details.part', 'receivedBy'); // 'createdBy' diganti 'receivedBy' sesuai model Anda
 
         $stockMovements = $receiving->stockMovements()->with('rak')->get();
 

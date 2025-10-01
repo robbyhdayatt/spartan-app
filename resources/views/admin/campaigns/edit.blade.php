@@ -22,7 +22,7 @@
                 </div>
             @endif
 
-            {{-- Baris 1: Info Dasar --}}
+            {{-- Info Dasar --}}
             <div class="row">
                 <div class="col-md-4 form-group">
                     <label>Nama Campaign <span class="text-danger">*</span></label>
@@ -38,7 +38,7 @@
                 </div>
             </div>
 
-            {{-- Baris 2: Periode --}}
+            {{-- Periode --}}
             <div class="row">
                 <div class="col-md-3 form-group">
                     <label>Tanggal Mulai <span class="text-danger">*</span></label>
@@ -53,30 +53,57 @@
             <hr>
             <h5><strong>Aturan Cakupan Campaign</strong></h5>
 
-            {{-- Cakupan Supplier --}}
-            <div class="form-group">
-                <label>Cakupan Supplier</label>
-                <div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="applies_to_all_suppliers" id="allSuppliers" value="1" {{ $campaign->suppliers->isEmpty() ? 'checked' : '' }}>
-                        <label class="form-check-label" for="allSuppliers">Berlaku untuk Semua Supplier</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="applies_to_all_suppliers" id="selectSuppliers" value="0" {{ !$campaign->suppliers->isEmpty() ? 'checked' : '' }}>
-                        <label class="form-check-label" for="selectSuppliers">Pilih Supplier Tertentu</label>
+            {{-- Cakupan Supplier (Hanya untuk Tipe Pembelian) --}}
+            <div id="purchaseFieldsContainer" style="{{ $campaign->tipe !== 'PEMBELIAN' ? 'display: none;' : '' }}">
+                <div class="form-group">
+                    <label>Cakupan Supplier</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="applies_to_all_suppliers" id="allSuppliers" value="1" {{ $campaign->suppliers->isEmpty() ? 'checked' : '' }}>
+                            <label class="form-check-label" for="allSuppliers">Berlaku untuk Semua Supplier</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="applies_to_all_suppliers" id="selectSuppliers" value="0" {{ !$campaign->suppliers->isEmpty() ? 'checked' : '' }}>
+                            <label class="form-check-label" for="selectSuppliers">Pilih Supplier Tertentu</label>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="form-group" id="supplierSelectionContainer" style="{{ $campaign->suppliers->isEmpty() ? 'display: none;' : '' }}">
-                <label for="supplier_ids">Pilih Supplier</label>
-                <select name="supplier_ids[]" id="supplier_ids" class="form-control select2" multiple="multiple">
-                    @foreach($suppliers as $supplier)
-                        <option value="{{ $supplier->id }}" {{ $campaign->suppliers->contains($supplier->id) ? 'selected' : '' }}>{{ $supplier->nama_supplier }}</option>
-                    @endforeach
-                </select>
+                <div class="form-group" id="supplierSelectionContainer" style="{{ $campaign->suppliers->isEmpty() ? 'display: none;' : '' }}">
+                    <label for="supplier_ids">Pilih Supplier</label>
+                    <select name="supplier_ids[]" id="supplier_ids" class="form-control select2" multiple="multiple" style="width: 100%;">
+                        @foreach($suppliers as $supplier)
+                            <option value="{{ $supplier->id }}" {{ $campaign->suppliers->contains($supplier->id) ? 'selected' : '' }}>{{ $supplier->nama_supplier }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
 
-            {{-- Cakupan Part --}}
+            {{-- Cakupan Konsumen (Hanya untuk Tipe Penjualan) --}}
+            <div id="salesFieldsContainer" style="{{ $campaign->tipe !== 'PENJUALAN' ? 'display: none;' : '' }}">
+                 <div class="form-group">
+                    <label>Cakupan Konsumen</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="applies_to_all_konsumens" id="allKonsumens" value="1" {{ $campaign->konsumens->isEmpty() ? 'checked' : '' }}>
+                            <label class="form-check-label" for="allKonsumens">Berlaku untuk Semua Konsumen</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="applies_to_all_konsumens" id="selectKonsumens" value="0" {{ !$campaign->konsumens->isEmpty() ? 'checked' : '' }}>
+                            <label class="form-check-label" for="selectKonsumens">Pilih Konsumen Tertentu</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="konsumenSelectionContainer" style="{{ $campaign->konsumens->isEmpty() ? 'display: none;' : '' }}">
+                    <label for="konsumen_ids">Pilih Konsumen</label>
+                    <select name="konsumen_ids[]" id="konsumen_ids" class="form-control select2" multiple="multiple" style="width: 100%;">
+                        @foreach($konsumens as $konsumen)
+                            <option value="{{ $konsumen->id }}" {{ $campaign->konsumens->contains($konsumen->id) ? 'selected' : '' }}>{{ $konsumen->nama_konsumen }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            {{-- Cakupan Part (Berlaku untuk semua tipe) --}}
             <div class="form-group">
                 <label>Cakupan Part</label>
                 <div>
@@ -92,13 +119,12 @@
             </div>
             <div class="form-group" id="partSelectionContainer" style="{{ $campaign->parts->isEmpty() ? 'display: none;' : '' }}">
                 <label for="part_ids">Pilih Part</label>
-                <select name="part_ids[]" id="part_ids" class="form-control select2" multiple="multiple">
+                <select name="part_ids[]" id="part_ids" class="form-control select2" multiple="multiple" style="width: 100%;">
                     @foreach($parts as $part)
                         <option value="{{ $part->id }}" {{ $campaign->parts->contains($part->id) ? 'selected' : '' }}>{{ $part->kode_part }} - {{ $part->nama_part }}</option>
                     @endforeach
                 </select>
             </div>
-
         </div>
         <div class="card-footer text-right">
             <button type="submit" class="btn btn-primary">Update Campaign</button>
@@ -113,29 +139,22 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    // Inisialisasi Select2 dengan lebar 100%
     $('.select2').select2({
         placeholder: "Pilih item...",
         allowClear: true,
-        width: '100%' // <-- TAMBAHKAN BARIS INI
+        width: '100%'
     });
 
     $('input[name="applies_to_all_suppliers"]').on('change', function() {
-        if ($(this).val() === '0') {
-            $('#supplierSelectionContainer').slideDown();
-        } else {
-            $('#supplierSelectionContainer').slideUp();
-            $('#supplier_ids').val(null).trigger('change');
-        }
+        $('#supplierSelectionContainer').slideToggle($(this).val() === '0');
+    });
+
+    $('input[name="applies_to_all_konsumens"]').on('change', function() {
+        $('#konsumenSelectionContainer').slideToggle($(this).val() === '0');
     });
 
     $('input[name="applies_to_all_parts"]').on('change', function() {
-        if ($(this).val() === '0') {
-            $('#partSelectionContainer').slideDown();
-        } else {
-            $('#partSelectionContainer').slideUp();
-            $('#part_ids').val(null).trigger('change');
-        }
+        $('#partSelectionContainer').slideToggle($(this).val() === '0');
     });
 });
 </script>

@@ -110,17 +110,20 @@ class StockAdjustmentController extends Controller
                 $inventory->increment('quantity', $jumlah);
             }
 
+            // --- PERBAIKAN LOGIKA DI SINI ---
             \App\Models\StockMovement::create([
                 'part_id' => $stockAdjustment->part_id,
                 'gudang_id' => $stockAdjustment->gudang_id,
-                'tipe_gerakan' => 'ADJUSTMENT',
+                'rak_id' => $stockAdjustment->rak_id,
                 'jumlah' => ($stockAdjustment->tipe === 'TAMBAH' ? $jumlah : -$jumlah),
                 'stok_sebelum' => $stokSebelum,
                 'stok_sesudah' => $inventory->quantity,
-                'referensi' => 'ADJ-' . $stockAdjustment->id,
+                'referensi_type' => get_class($stockAdjustment),
+                'referensi_id' => $stockAdjustment->id,
                 'keterangan' => $stockAdjustment->alasan,
-                'user_id' => Auth::id(),
+                'user_id' => $stockAdjustment->created_by, // <-- DIUBAH DARI Auth::id()
             ]);
+            // --- END PERBAIKAN ---
 
             $stockAdjustment->status = 'APPROVED';
             $stockAdjustment->approved_by = Auth::id();

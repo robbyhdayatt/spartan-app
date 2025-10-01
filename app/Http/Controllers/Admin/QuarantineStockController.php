@@ -14,25 +14,21 @@ use Illuminate\Support\Facades\Auth;
 
 class QuarantineStockController extends Controller
 {
-public function __construct()
+    public function __construct()
     {
         $this->middleware('can:can-process-quarantine');
     }
 
-    /**
-     * Menampilkan daftar stok di rak karantina.
-     */
     public function index()
     {
         $user = Auth::user();
         $gudangFilter = null;
 
         // Terapkan filter gudang HANYA jika user BUKAN Super Admin atau Manajer Area
-        if (!in_array($user->jabatan->singkatan, ['SA'])) {
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $gudangFilter = $user->gudang_id;
         }
 
-        // Data untuk Tab 1: Stok di rak PENYIMPANAN yang bisa dikarantina
         $storageItemsQuery = Inventory::whereHas('rak', function ($query) {
             $query->where('tipe_rak', 'PENYIMPANAN');
         })->where('quantity', '>', 0);
@@ -42,7 +38,6 @@ public function __construct()
         }
         $storageItems = $storageItemsQuery->with(['part', 'gudang', 'rak'])->latest()->get();
 
-        // Data untuk Tab 2: Stok di rak KARANTINA yang perlu diproses
         $quarantineItemsQuery = Inventory::whereHas('rak', function ($query) {
             $query->where('tipe_rak', 'KARANTINA');
         })->where('quantity', '>', 0);
@@ -52,16 +47,11 @@ public function __construct()
         }
         $quarantineItems = $quarantineItemsQuery->with(['part', 'gudang', 'rak'])->latest()->get();
 
-        // Data untuk dropdown rak tujuan
         $storageRaks = Rak::where('tipe_rak', 'PENYIMPANAN')->where('is_active', true)->get()->groupBy('gudang_id');
 
         return view('admin.quarantine_stock.index', compact('storageItems', 'quarantineItems', 'storageRaks'));
     }
 
-
-    /**
-     * Memproses stok dari rak karantina.
-     */
     public function process(Request $request)
     {
         $validated = $request->validate([
@@ -75,47 +65,62 @@ public function __construct()
         DB::beginTransaction();
         try {
             $inventory = Inventory::with(['part', 'rak'])->findOrFail($validated['inventory_id']);
+            $quantityToProcess = $validated['quantity'];
 
-            if ($validated['quantity'] > $inventory->quantity) {
+            if ($quantityToProcess > $inventory->quantity) {
                 throw new \Exception('Jumlah yang diproses melebihi stok karantina.');
             }
 
             if ($validated['action'] === 'return_to_stock') {
-                // LOGIKA BARU: Buat permintaan mutasi dari rak karantina ke rak penyimpanan
+                // --- PERBAIKAN LOGIKA: Langsung pindahkan stok dan catat ---
                 $destinationRak = Rak::findOrFail($validated['destination_rak_id']);
                 if ($inventory->gudang_id != $destinationRak->gudang_id) {
                     throw new \Exception('Rak tujuan harus berada di gudang yang sama.');
                 }
 
-                StockMutation::create([
-                    'nomor_mutasi'      => StockMutation::generateNomorMutasi(),
-                    'part_id'           => $inventory->part_id,
-                    'gudang_asal_id'    => $inventory->gudang_id,
-                    'gudang_tujuan_id'  => $destinationRak->gudang_id,
-                    'rak_asal_id'       => $inventory->rak_id,
-                    'rak_tujuan_id'     => $destinationRak->id,
-                    'jumlah'            => $validated['quantity'],
-                    'status'            => 'PENDING_APPROVAL', // Menunggu persetujuan
-                    'keterangan'        => 'Pengembalian dari karantina ke stok penjualan.',
-                    'created_by'        => auth()->id(),
+                $stokSebelumKarantina = $inventory->quantity;
+                $inventory->decrement('quantity', $quantityToProcess);
+
+                $destinationInventory = Inventory::firstOrCreate(
+                    ['part_id' => $inventory->part_id, 'rak_id' => $destinationRak->id],
+                    ['gudang_id' => $inventory->gudang_id, 'quantity' => 0]
+                );
+                $stokSebelumTujuan = $destinationInventory->quantity;
+                $destinationInventory->increment('quantity', $quantityToProcess);
+
+                // Buat 2 Stock Movement: KELUAR dari karantina, MASUK ke rak tujuan
+                $user = auth()->user();
+                StockMovement::create([
+                    'part_id' => $inventory->part_id, 'gudang_id' => $inventory->gudang_id, 'rak_id' => $inventory->rak_id,
+                    'jumlah' => -$quantityToProcess, 'stok_sebelum' => $stokSebelumKarantina, 'stok_sesudah' => $inventory->quantity,
+                    'referensi_type' => get_class($user), 'referensi_id' => $user->id, 'user_id' => $user->id,
+                    'keterangan' => 'Keluar dari karantina ke rak ' . $destinationRak->kode_rak,
+                ]);
+                StockMovement::create([
+                    'part_id' => $destinationInventory->part_id, 'gudang_id' => $destinationInventory->gudang_id, 'rak_id' => $destinationInventory->rak_id,
+                    'jumlah' => $quantityToProcess, 'stok_sebelum' => $stokSebelumTujuan, 'stok_sesudah' => $destinationInventory->quantity,
+                    'referensi_type' => get_class($user), 'referensi_id' => $user->id, 'user_id' => $user->id,
+                    'keterangan' => 'Masuk ke stok dari rak karantina ' . $inventory->rak->kode_rak,
                 ]);
 
+                if ($inventory->quantity <= 0) {
+                    $inventory->delete();
+                }
+
+                $message = 'Barang berhasil dikembalikan ke stok penjualan dan riwayat tercatat.';
+
             } elseif ($validated['action'] === 'write_off') {
-                // LOGIKA WRITE-OFF: Buat permintaan adjusment
+                // Logika write-off: Buat permintaan adjusment (ini sudah benar)
                 StockAdjustment::create([
-                    'part_id'       => $inventory->part_id,
-                    'gudang_id'     => $inventory->gudang_id,
-                    'rak_id'        => $inventory->rak_id,
-                    'tipe'          => 'KURANG',
-                    'jumlah'        => $validated['quantity'],
-                    'alasan'        => $validated['reason'],
-                    'status'        => 'PENDING_APPROVAL', // Menunggu persetujuan
-                    'created_by'    => auth()->id(),
+                    'part_id' => $inventory->part_id, 'gudang_id' => $inventory->gudang_id, 'rak_id' => $inventory->rak_id,
+                    'tipe' => 'KURANG', 'jumlah' => $quantityToProcess, 'alasan' => $validated['reason'],
+                    'status' => 'PENDING_APPROVAL', 'created_by' => auth()->id(),
                 ]);
+                $message = 'Permintaan write-off berhasil diajukan dan menunggu persetujuan.';
             }
 
             DB::commit();
-            return redirect()->route('admin.quarantine-stock.index')->with('success', 'Aksi karantina berhasil diajukan dan menunggu persetujuan dari Kepala Gudang.');
+            return redirect()->route('admin.quarantine-stock.index')->with('success', $message);
 
         } catch (\Exception $e) {
             DB::rollBack();
