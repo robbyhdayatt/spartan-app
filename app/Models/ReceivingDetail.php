@@ -10,9 +10,6 @@ class ReceivingDetail extends Model
     use HasFactory;
     protected $guarded = ['id'];
 
-    /**
-     * Get the main receiving document that this detail belongs to.
-     */
     public function receiving()
     {
         return $this->belongsTo(Receiving::class);
@@ -21,5 +18,11 @@ class ReceivingDetail extends Model
     public function part()
     {
         return $this->belongsTo(Part::class);
+    }
+
+    // --- TAMBAHKAN FUNGSI INI ---
+    public function inventoryBatches()
+    {
+        return $this->hasMany(InventoryBatch::class);
     }
 }

@@ -167,5 +167,5 @@
         Route::get('api/parts/{part}/purchase-details', [PurchaseOrderController::class, 'getPartPurchaseDetails'])->name('api.part.purchase-details');
         Route::get('api/part-stock-details', [StockMutationController::class, 'getPartStockDetails'])->name('api.part.stock-details');
         Route::get('api/calculate-discount', [PenjualanController::class, 'calculateDiscount'])->name('api.calculate-discount');
-
+        Route::get('api/get-fifo-batches', [PenjualanController::class, 'getFifoBatches'])->name('api.get-fifo-batches');
     });

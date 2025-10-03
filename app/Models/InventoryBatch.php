@@ -5,9 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class StockMovement extends Model
+class InventoryBatch extends Model
 {
     use HasFactory;
+
     protected $guarded = ['id'];
 
     public function part()
@@ -15,18 +16,18 @@ class StockMovement extends Model
         return $this->belongsTo(Part::class);
     }
 
+    public function rak()
+    {
+        return $this->belongsTo(Rak::class);
+    }
+
     public function gudang()
     {
         return $this->belongsTo(Gudang::class);
     }
 
-    public function user()
+    public function receivingDetail()
     {
-        return $this->belongsTo(User::class);
-    }
-
-    public function rak()
-    {
-        return $this->belongsTo(Rak::class);
+        return $this->belongsTo(ReceivingDetail::class);
     }
 }

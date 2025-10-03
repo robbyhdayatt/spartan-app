@@ -8,7 +8,7 @@ use App\Models\Konsumen;
 use App\Models\Gudang;
 use App\Models\User;
 use App\Models\Part;
-use App\Models\Inventory;
+use App\Models\InventoryBatch;
 use App\Models\Jabatan;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
@@ -57,7 +57,7 @@ class PenjualanController extends Controller
             'tanggal_jual' => 'required|date',
             'items' => 'required|array|min:1',
             'items.*.part_id' => 'required|exists:parts,id',
-            'items.*.rak_id' => 'required|exists:raks,id',
+            'items.*.batch_id' => 'required|exists:inventory_batches,id',
             'items.*.qty_jual' => 'required|integer|min:1',
         ]);
 
@@ -67,9 +67,8 @@ class PenjualanController extends Controller
             $totalSubtotalServer = 0;
             $totalDiskonServer = 0;
 
-            // --- PERBAIKAN DI SINI ---
             $penjualan = Penjualan::create([
-                'nomor_faktur' => Penjualan::generateNomorFaktur(), // Diubah dari generateInvoiceNumber()
+                'nomor_faktur' => Penjualan::generateNomorFaktur(),
                 'tanggal_jual' => $validated['tanggal_jual'],
                 'gudang_id' => $validated['gudang_id'],
                 'konsumen_id' => $validated['konsumen_id'],
@@ -80,6 +79,11 @@ class PenjualanController extends Controller
             foreach ($validated['items'] as $item) {
                 $part = Part::find($item['part_id']);
                 $qty = (int)$item['qty_jual'];
+                $batch = InventoryBatch::findOrFail($item['batch_id']);
+
+                if ($batch->quantity < $qty) {
+                    throw new \Exception("Stok di batch untuk part '{$part->nama_part}' tidak mencukupi.");
+                }
 
                 $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $part->harga_jual_default);
                 $finalPrice = $discountResult['final_price'];
@@ -88,16 +92,12 @@ class PenjualanController extends Controller
                 $totalSubtotalServer += $itemSubtotal;
                 $totalDiskonServer += ($part->harga_jual_default - $finalPrice) * $qty;
 
-                $inventory = Inventory::where('rak_id', $item['rak_id'])->where('part_id', $part->id)->first();
-                if (!$inventory || $inventory->quantity < $qty) {
-                    throw new \Exception("Stok tidak mencukupi untuk part '{$part->nama_part}' di rak '{$inventory->rak->kode_rak}'. Sisa stok: {$inventory->quantity}.");
-                }
-                $stokSebelum = $inventory->quantity;
-                $inventory->decrement('quantity', $qty);
+                $stokSebelum = $batch->quantity;
+                $batch->decrement('quantity', $qty);
 
                 $penjualan->details()->create([
                     'part_id' => $part->id,
-                    'rak_id' => $item['rak_id'],
+                    'rak_id' => $batch->rak_id,
                     'qty_jual' => $qty,
                     'harga_jual' => $finalPrice,
                     'subtotal' => $itemSubtotal,
@@ -106,19 +106,18 @@ class PenjualanController extends Controller
                 $penjualan->stockMovements()->create([
                     'part_id' => $part->id,
                     'gudang_id' => $penjualan->gudang_id,
-                    'rak_id' => $item['rak_id'],
+                    'rak_id' => $batch->rak_id,
                     'jumlah' => -$qty,
                     'stok_sebelum' => $stokSebelum,
-                    'stok_sesudah' => $inventory->quantity,
+                    'stok_sesudah' => $batch->quantity,
                     'user_id' => auth()->id(),
                     'keterangan' => 'Penjualan via Faktur #' . $penjualan->nomor_faktur,
                 ]);
             }
 
-            $pajak = 0;
-            if ($request->pajak > 0) {
-                 $pajak = $totalSubtotalServer * 0.11;
-            }
+            InventoryBatch::where('quantity', '<=', 0)->delete();
+
+            $pajak = ($request->pajak > 0) ? $totalSubtotalServer * 0.11 : 0;
             $totalHarga = $totalSubtotalServer + $pajak;
 
             $penjualan->update([
@@ -129,7 +128,7 @@ class PenjualanController extends Controller
             ]);
 
             DB::commit();
-            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan berhasil disimpan.');
+            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan FIFO berhasil disimpan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -153,39 +152,46 @@ class PenjualanController extends Controller
 
     // --- API Methods ---
 
+    // --- PERBAIKAN UTAMA DI FUNGSI INI ---
     public function getPartsByGudang(Gudang $gudang)
     {
-        $partIdsInStock = Inventory::where('gudang_id', $gudang->id)
-            ->where('quantity', '>', 0)
-            ->pluck('part_id')
-            ->unique();
-
-        $parts = Part::whereIn('id', $partIdsInStock)
-            ->select('id', 'nama_part', 'kode_part')
-            ->orderBy('nama_part')
-            ->get();
+        $parts = Part::whereHas('inventoryBatches', function ($query) use ($gudang) {
+            $query->where('gudang_id', $gudang->id)->where('quantity', '>', 0);
+        })
+        ->withSum(['inventoryBatches' => function ($query) use ($gudang) {
+            $query->where('gudang_id', $gudang->id);
+        }], 'quantity')
+        ->orderBy('nama_part')
+        ->get()
+        ->map(function($part) {
+            return [
+                'id' => $part->id,
+                'kode_part' => $part->kode_part,
+                'nama_part' => $part->nama_part,
+                'total_stock' => (int) $part->inventory_batches_sum_quantity,
+            ];
+        });
 
         return response()->json($parts);
     }
 
-    public function getPartStockDetails(Request $request, Part $part)
+    public function getFifoBatches(Request $request)
     {
-        $validated = $request->validate(['gudang_id' => 'required|exists:gudangs,id']);
-        $stockDetails = Inventory::join('raks', 'inventories.rak_id', '=', 'raks.id')
-            ->where('inventories.part_id', $part->id)
-            ->where('inventories.gudang_id', $validated['gudang_id'])
-            ->where('inventories.quantity', '>', 0)
-            ->where('raks.tipe_rak', 'PENYIMPANAN')
-            ->select('raks.id as rak_id', 'raks.kode_rak', 'inventories.quantity')
-            ->get();
-        return response()->json($stockDetails);
-    }
+        $validated = $request->validate([
+            'part_id' => 'required|exists:parts,id',
+            'gudang_id' => 'required|exists:gudangs,id',
+        ]);
 
-    public function getDetails($id)
-    {
-        $penjualan = \App\Models\Penjualan::with('details.part')->find($id);
-        if (!$penjualan) { return response()->json(['error' => 'Faktur tidak ditemukan'], 404); }
-        return response()->json($penjualan->details);
+        $batches = InventoryBatch::where('part_id', $validated['part_id'])
+            ->where('gudang_id', $validated['gudang_id'])
+            ->where('quantity', '>', 0)
+            ->with(['rak', 'receivingDetail.receiving'])
+            ->get()
+            ->sortBy(function($batch) {
+                return $batch->receivingDetail->receiving->tanggal_terima->format('Y-m-d') . '_' . str_pad($batch->receiving_detail_id, 8, '0', STR_PAD_LEFT);
+            });
+
+        return response()->json($batches->values()->all());
     }
 
     public function calculateDiscount(Request $request)

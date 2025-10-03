@@ -116,11 +116,7 @@
             <div class="col-4">
                 <div class="signature-box">
                     Disetujui Oleh,
-                    <div class="signature-line">
-                         @if($purchaseOrder->approved_at)
-                            <p style="font-size: 0.8rem; color: green;">Disetujui pada:<br>{{ $purchaseOrder->approved_at->format('d/m/Y H:i') }}</p>
-                        @endif
-                    </div>
+                    <div class="signature-line"></div>
                     <div class="signature-name">({{ $purchaseOrder->approvedBy->nama ?? '(_________________)' }})</div>
                 </div>
             </div>

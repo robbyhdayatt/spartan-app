@@ -14,35 +14,23 @@ class ReceivingController extends Controller
     public function index()
     {
         $user = Auth::user();
-
         $query = \App\Models\Receiving::with(['purchaseOrder', 'gudang', 'receivedBy']);
-
         if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
-
         $receivings = $query->latest()->paginate(15);
-
         return view('admin.receivings.index', compact('receivings'));
     }
 
     public function create()
     {
         $this->authorize('can-receive');
-
         $user = Auth::user();
-
-        // --- PERBAIKAN LOGIKA DI SINI ---
-        // Sekarang mengambil PO yang statusnya 'APPROVED' atau 'PARTIALLY_RECEIVED'
         $query = PurchaseOrder::whereIn('status', ['APPROVED', 'PARTIALLY_RECEIVED']);
-        // --- END PERBAIKAN ---
-
         if (!in_array($user->jabatan->singkatan, ['SA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
-
         $purchaseOrders = $query->orderBy('tanggal_po', 'desc')->get();
-
         return view('admin.receivings.create', compact('purchaseOrders'));
     }
 
@@ -67,38 +55,33 @@ class ReceivingController extends Controller
         try {
             $po = PurchaseOrder::with('details')->findOrFail($request->purchase_order_id);
 
+            // --- PERBAIKAN UTAMA DI SINI ---
             $receiving = Receiving::create([
                 'purchase_order_id' => $po->id,
                 'gudang_id' => $po->gudang_id,
-                'nomor_penerimaan' => $this->generateReceivingNumber(),
+                'nomor_penerimaan' => Receiving::generateReceivingNumber(), // Memanggil dari Model
                 'tanggal_terima' => $request->tanggal_terima,
                 'status' => 'PENDING_QC',
                 'catatan' => $request->catatan,
+                'created_by' => Auth::id(), // <-- INI YANG MEMPERBAIKI DATA NULL
                 'received_by' => Auth::id(),
             ]);
+            // --- END PERBAIKAN ---
 
             foreach ($request->items as $partId => $itemData) {
                 $poDetail = $po->details->firstWhere('part_id', $partId);
-
                 if ($poDetail) {
                     $poDetail->qty_diterima += $itemData['qty_terima'];
                     $poDetail->save();
                 }
-
                 $receiving->details()->create([
                     'part_id' => $partId,
                     'qty_terima' => $itemData['qty_terima'],
                 ]);
             }
 
-            $fullyReceived = true;
             $po->refresh();
-            foreach ($po->details as $detail) {
-                if ($detail->qty_diterima < $detail->qty_pesan) {
-                    $fullyReceived = false;
-                    break;
-                }
-            }
+            $fullyReceived = $po->details->every(fn($detail) => $detail->qty_diterima >= $detail->qty_pesan);
 
             $po->status = $fullyReceived ? 'FULLY_RECEIVED' : 'PARTIALLY_RECEIVED';
             $po->save();
@@ -114,18 +97,11 @@ class ReceivingController extends Controller
 
     public function show(Receiving $receiving)
     {
-        $receiving->load('purchaseOrder.supplier', 'details.part', 'receivedBy'); // 'createdBy' diganti 'receivedBy' sesuai model Anda
+        // Memuat semua relasi yang dibutuhkan untuk ditampilkan
+        $receiving->load('purchaseOrder.supplier', 'details.part', 'createdBy', 'receivedBy', 'qcBy', 'putawayBy');
 
-        $stockMovements = $receiving->stockMovements()->with('rak')->get();
+        $stockMovements = $receiving->stockMovements()->with(['rak', 'user'])->get();
 
         return view('admin.receivings.show', compact('receiving', 'stockMovements'));
-    }
-
-    private function generateReceivingNumber()
-    {
-        $date = now()->format('Ymd');
-        $latest = Receiving::whereDate('created_at', today())->count();
-        $sequence = str_pad($latest + 1, 4, '0', STR_PAD_LEFT);
-        return "RCV/{$date}/{$sequence}";
     }
 }

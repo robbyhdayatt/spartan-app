@@ -14,7 +14,8 @@
             <h3 class="card-title">No. Penerimaan: {{ $receiving->nomor_penerimaan }}</h3>
         </div>
         <div class="card-body">
-             @if ($errors->any())
+            {{-- BLOK UNTUK MENAMPILKAN SEMUA JENIS ERROR --}}
+            @if ($errors->any())
                 <div class="alert alert-danger">
                     <ul class="mb-0">
                         @foreach ($errors->all() as $error)
@@ -23,6 +24,15 @@
                     </ul>
                 </div>
             @endif
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ session('error') }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            @endif
+
             <p>Pilih rak tujuan untuk setiap item yang telah lolos QC.</p>
             <table class="table table-bordered">
                 <thead>
@@ -33,7 +43,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($receiving->details as $detail)
+                    @forelse($itemsToPutaway as $detail)
                     <tr>
                         <td>{{ $detail->part->nama_part }} ({{ $detail->part->kode_part }})</td>
                         <td>
@@ -41,19 +51,23 @@
                         </td>
                         <td>
                              <select name="items[{{ $detail->id }}][rak_id]" class="form-control" required>
-                                <option value="" disabled selected>Pilih Rak</option>
-                                @foreach($raks as $rak)
-                                    <option value="{{ $rak->id }}">{{ $rak->nama_rak }} ({{ $rak->kode_rak }})</option>
-                                @endforeach
+                                 <option value="" disabled selected>Pilih Rak</option>
+                                 @foreach($raks as $rak)
+                                     <option value="{{ $rak->id }}">{{ $rak->nama_rak }} ({{ $rak->kode_rak }})</option>
+                                 @endforeach
                              </select>
                         </td>
                     </tr>
-                    @endforeach
+                    @empty
+                    <tr>
+                        <td colspan="3" class="text-center">Tidak ada item yang perlu disimpan dari dokumen ini.</td>
+                    </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>
-        <div classs="card-footer">
-            <button type="submit" class="btn btn-primary">Simpan ke Rak & Update Stok</button>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary" {{ $itemsToPutaway->isEmpty() ? 'disabled' : '' }}>Simpan ke Rak & Update Stok</button>
             <a href="{{ route('admin.putaway.index') }}" class="btn btn-secondary">Batal</a>
         </div>
     </form>
