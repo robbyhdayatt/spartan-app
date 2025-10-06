@@ -11,29 +11,21 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\PartsImport;
 use Maatwebsite\Excel\Validators\ValidationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Auth; // Pastikan ini ada
 
 class PartController extends Controller
 {
+    /**
+     * Terapkan middleware otentikasi ke semua metode di controller ini.
+     */
     public function __construct()
     {
-        // Izinkan semua user yang login untuk melihat daftar part (index)
         $this->middleware('auth');
-
-        // Batasi akses untuk metode lainnya hanya untuk peran tertentu
-        $this->middleware(function ($request, $next) {
-            $userRole = Auth::user()->jabatan->nama_jabatan;
-            if ($userRole !== 'Super Admin' && $userRole !== 'Manajer Area') {
-                // Jika mencoba mengakses selain method 'index' atau 'show', tolak aksesnya
-                // (Asumsi 'show' juga read-only)
-                if (!$request->isMethod('get')) {
-                     abort(403, 'ANDA TIDAK MEMILIKI HAK AKSES.');
-                }
-            }
-            return $next($request);
-        })->except(['index', 'show']); // Terapkan middleware ini ke semua method KECUALI index dan show
     }
 
+    /**
+     * Menampilkan daftar semua part. Boleh diakses semua role yang login.
+     */
     public function index()
     {
         $parts = Part::with(['brand', 'category'])->latest()->get();
@@ -43,9 +35,14 @@ class PartController extends Controller
         return view('admin.parts.index', compact('parts', 'brands', 'categories'));
     }
 
+    /**
+     * Menyimpan part baru. Hanya untuk Super Admin.
+     */
     public function store(Request $request)
     {
+        // Menggunakan Gate 'is-super-admin' yang sudah Anda definisikan
         $this->authorize('is-super-admin');
+
         $validated = $request->validate([
             'kode_part' => 'required|string|max:50|unique:parts',
             'nama_part' => 'required|string|max:255',
@@ -62,9 +59,13 @@ class PartController extends Controller
         return redirect()->route('admin.parts.index')->with('success', 'Part berhasil ditambahkan!');
     }
 
+    /**
+     * Memperbarui part yang ada. Hanya untuk Super Admin.
+     */
     public function update(Request $request, Part $part)
     {
         $this->authorize('is-super-admin');
+
         $validated = $request->validate([
             'kode_part' => 'required|string|max:50|unique:parts,kode_part,' . $part->id,
             'nama_part' => 'required|string|max:255',
@@ -82,16 +83,28 @@ class PartController extends Controller
         return redirect()->route('admin.parts.index')->with('success', 'Part berhasil diperbarui!');
     }
 
+    /**
+     * Menghapus part. Hanya untuk Super Admin.
+     */
     public function destroy(Part $part)
     {
         $this->authorize('is-super-admin');
+
+        // Tambahkan pengecekan relasi sebelum menghapus
+        if ($part->inventoryBatches()->exists() || $part->penjualanDetails()->exists() || $part->purchaseOrderDetails()->exists()) {
+            return redirect()->route('admin.parts.index')->with('error', 'Part tidak dapat dihapus karena sudah memiliki riwayat transaksi.');
+        }
+
         $part->delete();
         return redirect()->route('admin.parts.index')->with('success', 'Part berhasil dihapus!');
     }
 
+    /**
+     * Mengimpor part dari file Excel. Hanya untuk Super Admin.
+     */
     public function import(Request $request)
     {
-        $this->authorize('is-super-admin'); // Pastikan hanya admin yang bisa import
+        $this->authorize('is-super-admin');
 
         $request->validate([
             'file' => 'required|mimes:xlsx,xls',
@@ -110,58 +123,32 @@ class PartController extends Controller
 
         return redirect()->route('admin.parts.index')->with('success', 'Data part berhasil diimpor.');
     }
+
+    /**
+     * API untuk pencarian part (digunakan di form lain). Boleh diakses semua role.
+     */
     public function search(Request $request)
     {
         $query = $request->get('q');
-        $page = $request->get('page', 1);
-        $perPage = 20;
-        $today = now()->toDateString();
-
-        // Build query dengan filtering dan logika harga kampanye
-        $partsQuery = \App\Models\Part::where('parts.is_active', true)
-            ->leftJoin('campaigns', function ($join) use ($today) {
-                $join->on('parts.id', '=', 'campaigns.part_id')
-                    ->where('campaigns.is_active', true)
-                    ->where('campaigns.tipe', 'PEMBELIAN')
-                    ->where('campaigns.tanggal_mulai', '<=', $today)
-                    ->where('campaigns.tanggal_selesai', '>=', $today);
+        $parts = Part::where('is_active', true)
+            ->where(function($q) use ($query) {
+                $q->where('nama_part', 'like', "%{$query}%")
+                  ->orWhere('kode_part', 'like', "%{$query}%");
             })
-            ->select(
-                'parts.id',
-                'parts.nama_part',
-                'parts.kode_part',
-                'parts.satuan',
-                'parts.brand_id',
-                'parts.category_id',
-                DB::raw('COALESCE(campaigns.harga_promo, parts.harga_beli_default) as effective_price')
-            )
-            ->with(['brand', 'category']); // Eager load relasi
-
-        // Terapkan filter pencarian jika ada
-        if (!empty($query)) {
-            $partsQuery->where(function($q) use ($query) {
-                $q->where('parts.nama_part', 'like', "%{$query}%")
-                ->orWhere('parts.kode_part', 'like', "%{$query}%");
-            });
-        }
-
-        // Ambil hasil dengan paginasi
-        $parts = $partsQuery
-            ->orderBy('parts.nama_part') // Urutkan berdasarkan nama
-            ->skip(($page - 1) * $perPage)
-            ->take($perPage)
+            ->with(['brand', 'category'])
+            ->limit(20)
             ->get();
 
-        // Format respons JSON untuk Select2
+        // Logika harga kampanye bisa disederhanakan atau dipisah jika kompleks
         return response()->json($parts->map(function($part) {
             return [
                 'id' => $part->id,
                 'nama_part' => $part->nama_part,
                 'kode_part' => $part->kode_part,
-                'effective_price' => $part->effective_price,
+                'harga_beli_default' => $part->harga_beli_default,
                 'satuan' => $part->satuan,
-                'brand_name' => $part->brand ? $part->brand->nama_brand : '',
-                'category_name' => $part->category ? $part->category->nama_kategori : '',
+                'brand_name' => optional($part->brand)->nama_brand,
+                'category_name' => optional($part->category)->nama_kategori,
             ];
         }));
     }

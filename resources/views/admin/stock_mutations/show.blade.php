@@ -22,8 +22,8 @@
                         @else <span class="badge badge-secondary">{{ $stockMutation->status }}</span>
                         @endif
                     </li>
-                    <li class="list-group-item"><b>Part:</b> {{ $stockMutation->part->nama_part }}</li>
-                    <li class="list-group-item"><b>Jumlah:</b> {{ $stockMutation->jumlah }}</li>
+                    <li class="list-group-item"><b>Part:</b> {{ $stockMutation->part->nama_part }} ({{$stockMutation->part->kode_part}})</li>
+                    <li class="list-group-item"><b>Jumlah:</b> {{ $stockMutation->jumlah }} {{ $stockMutation->part->satuan }}</li>
                     <li class="list-group-item"><b>Keterangan:</b> {{ $stockMutation->keterangan ?? '-' }}</li>
                 </ul>
             </div>
@@ -31,13 +31,20 @@
                 <h4>Detail Gudang</h4>
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item"><b>Gudang Asal:</b> {{ $stockMutation->gudangAsal->nama_gudang }}</li>
-                    <li class="list-group-item"><b>Rak Asal:</b> {{ $stockMutation->rakAsal->nama_rak }}</li>
+                    {{-- PERBAIKAN LOGIKA DI SINI --}}
+                    <li class="list-group-item"><b>Rak Asal:</b>
+                        @if ($stockMutation->rakAsal)
+                            {{ $stockMutation->rakAsal->nama_rak }} ({{ $stockMutation->rakAsal->kode_rak }})
+                        @else
+                            <span class="text-muted">Ditentukan saat approval (FIFO)</span>
+                        @endif
+                    </li>
                     <li class="list-group-item"><b>Gudang Tujuan:</b> {{ $stockMutation->gudangTujuan->nama_gudang }}</li>
                     <li class="list-group-item"><b>Rak Tujuan:</b>
                         @if($stockMutation->rakTujuan)
                             {{ $stockMutation->rakTujuan->nama_rak }} ({{ $stockMutation->rakTujuan->kode_rak }})
                         @else
-                            Belum Diterima
+                            <span class="text-muted">Belum Diterima</span>
                         @endif
                     </li>
                 </ul>
@@ -50,20 +57,19 @@
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item"><b>Dibuat Oleh:</b> {{ $stockMutation->createdBy->nama ?? 'N/A' }}</li>
                     <li class="list-group-item"><b>Tanggal Dibuat:</b> {{ $stockMutation->created_at->format('d M Y, H:i') }}</li>
-                    <li class="list-group-item"><b>Disetujui Oleh:</b> {{ $stockMutation->approvedBy->nama ?? 'N/A' }}</li>
+                    <li class="list-group-item"><b>Disetujui Oleh:</b> {{ optional($stockMutation->approvedBy)->nama ?? 'N/A' }}</li>
                     <li class="list-group-item"><b>Tanggal Disetujui:</b> {{ $stockMutation->approved_at ? $stockMutation->approved_at->format('d M Y, H:i') : 'N/A' }}</li>
                 </ul>
             </div>
              <div class="col-md-6">
                 <h4>Informasi Penerimaan</h4>
                 <ul class="list-group list-group-flush">
-                    <li class="list-group-item"><b>Diterima Oleh:</b> {{ $stockMutation->receivedBy->nama ?? 'N/A' }}</li>
+                    <li class="list-group-item"><b>Diterima Oleh:</b> {{ optional($stockMutation->receivedBy)->nama ?? 'N/A' }}</li>
                     <li class="list-group-item"><b>Tanggal Diterima:</b> {{ $stockMutation->received_at ? $stockMutation->received_at->format('d M Y, H:i') : 'N/A' }}</li>
                 </ul>
             </div>
         </div>
 
-        {{-- Tampilkan Alasan Penolakan JIKA ADA --}}
         @if($stockMutation->status === 'REJECTED' && $stockMutation->rejection_reason)
         <div class="row mt-3">
             <div class="col-12">
@@ -83,7 +89,6 @@
                     @csrf
                     <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Setujui & Kirim</button>
                 </form>
-                {{-- Tombol Tolak Baru --}}
                 <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#rejectMutationModal">
                     <i class="fas fa-times"></i> Tolak
                 </button>

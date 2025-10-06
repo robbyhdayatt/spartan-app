@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\Gudang;
-use App\Models\Inventory;
+use App\Models\InventoryBatch; // <--- UBAH DARI Inventory
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\StockByWarehouseExport;
 use App\Exports\SalesJournalExport;
@@ -75,25 +75,34 @@ class ReportController extends Controller
         $selectedGudang = null;
 
         if ($user->jabatan->nama_jabatan === 'Kepala Gudang') {
-            // Jika Kepala Gudang, paksa filter dan langsung tampilkan data
             $gudangs = Gudang::where('id', $user->gudang_id)->get();
-            $selectedGudang = $user->gudang;
-            $inventoryItems = Inventory::where('gudang_id', $user->gudang_id)
-                ->with(['part', 'rak'])
+            if (!$request->filled('gudang_id')) {
+                $request->merge(['gudang_id' => $user->gudang_id]);
+            }
+        } else {
+            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
+        }
+
+        if ($request->filled('gudang_id')) {
+            $selectedGudang = Gudang::find($request->gudang_id);
+
+            $inventoryItems = InventoryBatch::select(
+                    'part_id',
+                    'rak_id',
+                    'gudang_id',
+                    DB::raw('SUM(quantity) as quantity')
+                )
+                ->where('gudang_id', $request->gudang_id)
                 ->where('quantity', '>', 0)
+                ->with([
+                    'part:id,kode_part,nama_part,satuan,brand_id,category_id',
+                    'part.brand:id,nama_brand',
+                    'part.category:id,nama_kategori',
+                    'rak:id,kode_rak'
+                ])
+                ->groupBy('part_id', 'rak_id', 'gudang_id')
                 ->get()
                 ->sortBy('part.nama_part');
-        } else {
-            // Jika Super Admin atau Manajer, izinkan memilih dari dropdown
-            $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();
-            if ($request->filled('gudang_id')) {
-                $selectedGudang = Gudang::find($request->gudang_id);
-                $inventoryItems = Inventory::where('gudang_id', $request->gudang_id)
-                    ->with(['part', 'rak'])
-                    ->where('quantity', '>', 0)
-                    ->get()
-                    ->sortBy('part.nama_part');
-            }
         }
 
         return view('admin.reports.stock_by_warehouse', compact('inventoryItems', 'gudangs', 'selectedGudang'));
@@ -113,7 +122,6 @@ class ReportController extends Controller
 
     public function salesJournal(Request $request)
     {
-        // Set default date range ke bulan ini jika tidak ada input
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
         $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
 
@@ -162,13 +170,25 @@ class ReportController extends Controller
 
     public function inventoryValue()
     {
-        $inventoryDetails = Inventory::with(['part', 'gudang', 'rak'])
+        // Mengambil data dari inventory_batches dan mengelompokkannya
+        $inventoryDetails = InventoryBatch::select(
+                'part_id',
+                'gudang_id',
+                'rak_id',
+                DB::raw('SUM(quantity) as quantity')
+            )
             ->where('quantity', '>', 0)
+            ->with(['part', 'gudang', 'rak'])
+            ->groupBy('part_id', 'gudang_id', 'rak_id')
             ->get();
 
-        // Ganti 'harga_beli_default' menjadi 'harga_beli_rata_rata'
+        // Menghitung total nilai persediaan
         $totalValue = $inventoryDetails->sum(function($item) {
-            return $item->quantity * $item->part->harga_beli_rata_rata;
+            // Pastikan relasi part tidak null untuk menghindari error
+            if ($item->part) {
+                return $item->quantity * $item->part->harga_beli_rata_rata;
+            }
+            return 0;
         });
 
         return view('admin.reports.inventory_value', compact('inventoryDetails', 'totalValue'));
@@ -227,10 +247,18 @@ class ReportController extends Controller
 
     public function stockReport()
     {
-        $inventoryDetails = Inventory::with(['part', 'gudang', 'rak'])
+        // Mengambil data dari inventory_batches, menjumlahkan, dan mengelompokkan
+        $inventoryDetails = InventoryBatch::select(
+                'part_id',
+                'gudang_id',
+                'rak_id',
+                DB::raw('SUM(quantity) as quantity')
+            )
             ->where('quantity', '>', 0)
+            ->with(['part', 'gudang', 'rak'])
+            ->groupBy('part_id', 'gudang_id', 'rak_id')
             ->get()
-            ->sortBy(['part.nama_part', 'gudang.nama_gudang']); // Urutkan berdasarkan nama part, lalu gudang
+            ->sortBy(['part.nama_part', 'gudang.nama_gudang']);
 
         return view('admin.reports.stock_report', compact('inventoryDetails'));
     }

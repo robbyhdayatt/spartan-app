@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\StockAdjustment;
-use App\Models\Inventory;
+use App\Models\InventoryBatch;
 use App\Models\Part;
+use App\Models\StockMovement;
 use App\Models\Gudang;
 use App\Models\Rak; // <-- TAMBAHKAN ATAU PASTIKAN BARIS INI ADA
 use Illuminate\Http\Request;
@@ -78,64 +79,100 @@ class StockAdjustmentController extends Controller
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
 
-        DB::beginTransaction();
+        // Menggunakan DB Facade langsung untuk transaksi yang lebih aman
         try {
-            $inventory = null;
+            DB::transaction(function () use ($stockAdjustment) {
+                $part_id = $stockAdjustment->part_id;
+                $rak_id = $stockAdjustment->rak_id;
+                $gudang_id = $stockAdjustment->gudang_id;
+                $jumlahToAdjust = $stockAdjustment->jumlah;
+                $tipe = $stockAdjustment->tipe;
 
-            if ($stockAdjustment->tipe === 'KURANG') {
-                $inventory = Inventory::where('part_id', $stockAdjustment->part_id)
-                    ->where('gudang_id', $stockAdjustment->gudang_id)
-                    ->where('rak_id', $stockAdjustment->rak_id)
-                    ->firstOrFail();
-            } else { // TAMBAH
-                $inventory = Inventory::firstOrCreate(
-                    [
-                        'part_id' => $stockAdjustment->part_id,
-                        'gudang_id' => $stockAdjustment->gudang_id,
-                        'rak_id' => $stockAdjustment->rak_id
-                    ],
-                    ['quantity' => 0]
-                );
-            }
+                // Dapatkan total stok saat ini dari semua batch untuk pencatatan
+                $stokSebelum = InventoryBatch::where('part_id', $part_id)
+                    ->where('rak_id', $rak_id)
+                    ->sum('quantity');
 
-            $stokSebelum = $inventory->quantity;
-            $jumlah = $stockAdjustment->jumlah;
+                $stokSesudah = 0;
 
-            if ($stockAdjustment->tipe === 'KURANG') {
-                if ($stokSebelum < $jumlah) {
-                    throw new \Exception('Stok tidak mencukupi untuk penyesuaian pengurangan.');
+                if ($tipe === 'KURANG') {
+                    if ($stokSebelum < $jumlahToAdjust) {
+                        throw new \Exception('Stok tidak mencukupi. Stok tersedia: ' . $stokSebelum . ', dibutuhkan: ' . $jumlahToAdjust);
+                    }
+
+                    // Ambil semua batch yang relevan, urutkan dari yang paling lama (FIFO)
+                    $batches = InventoryBatch::where('part_id', $part_id)
+                        ->where('rak_id', $rak_id)
+                        ->where('quantity', '>', 0)
+                        ->orderBy('created_at', 'asc')
+                        ->get();
+
+                    $remainingQtyToReduce = $jumlahToAdjust;
+
+                    foreach ($batches as $batch) {
+                        if ($remainingQtyToReduce <= 0) break;
+
+                        $qtyInBatch = $batch->quantity;
+
+                        if ($qtyInBatch >= $remainingQtyToReduce) {
+                            // Batch ini cukup untuk memenuhi sisa pengurangan
+                            $batch->quantity -= $remainingQtyToReduce;
+                            $remainingQtyToReduce = 0;
+                        } else {
+                            // Habiskan batch ini dan lanjut ke batch berikutnya
+                            $remainingQtyToReduce -= $qtyInBatch;
+                            $batch->quantity = 0;
+                        }
+
+                        if ($batch->quantity == 0) {
+                            // Hapus batch jika stoknya habis
+                            $batch->delete();
+                        } else {
+                            $batch->save();
+                        }
+                    }
+
+                    $stokSesudah = $stokSebelum - $jumlahToAdjust;
+
+                } else { // Tipe 'TAMBAH'
+                    // Untuk penambahan, kita buat batch baru. Ini adalah pendekatan paling aman
+                    // untuk menjaga integritas data FIFO, meskipun tidak ada referensi ke penerimaan.
+                    InventoryBatch::create([
+                        'part_id' => $part_id,
+                        'rak_id' => $rak_id,
+                        'gudang_id' => $gudang_id,
+                        'quantity' => $jumlahToAdjust,
+                        'receiving_detail_id' => null, // Tidak ada referensi penerimaan
+                    ]);
+
+                    $stokSesudah = $stokSebelum + $jumlahToAdjust;
                 }
-                $inventory->decrement('quantity', $jumlah);
-            } else { // TAMBAH
-                $inventory->increment('quantity', $jumlah);
-            }
 
-            // --- PERBAIKAN LOGIKA DI SINI ---
-            \App\Models\StockMovement::create([
-                'part_id' => $stockAdjustment->part_id,
-                'gudang_id' => $stockAdjustment->gudang_id,
-                'rak_id' => $stockAdjustment->rak_id,
-                'jumlah' => ($stockAdjustment->tipe === 'TAMBAH' ? $jumlah : -$jumlah),
-                'stok_sebelum' => $stokSebelum,
-                'stok_sesudah' => $inventory->quantity,
-                'referensi_type' => get_class($stockAdjustment),
-                'referensi_id' => $stockAdjustment->id,
-                'keterangan' => $stockAdjustment->alasan,
-                'user_id' => $stockAdjustment->created_by, // <-- DIUBAH DARI Auth::id()
-            ]);
-            // --- END PERBAIKAN ---
+                // Catat pergerakan stok
+                StockMovement::create([
+                    'part_id' => $part_id,
+                    'gudang_id' => $gudang_id,
+                    'rak_id' => $rak_id,
+                    'jumlah' => ($tipe === 'TAMBAH' ? $jumlahToAdjust : -$jumlahToAdjust),
+                    'stok_sebelum' => $stokSebelum,
+                    'stok_sesudah' => $stokSesudah,
+                    'referensi_type' => get_class($stockAdjustment),
+                    'referensi_id' => $stockAdjustment->id,
+                    'keterangan' => "Adjustment: " . $stockAdjustment->alasan,
+                    'user_id' => $stockAdjustment->created_by,
+                ]);
 
-            $stockAdjustment->status = 'APPROVED';
-            $stockAdjustment->approved_by = Auth::id();
-            $stockAdjustment->approved_at = now();
-            $stockAdjustment->save();
+                // Update status permintaan adjustment
+                $stockAdjustment->status = 'APPROVED';
+                $stockAdjustment->approved_by = Auth::id();
+                $stockAdjustment->approved_at = now();
+                $stockAdjustment->save();
+            });
 
-            DB::commit();
             return redirect()->route('admin.stock-adjustments.index')->with('success', 'Adjusment stok disetujui dan stok telah diperbarui.');
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+            return back()->with('error', 'Gagal memproses persetujuan: ' . $e->getMessage());
         }
     }
 

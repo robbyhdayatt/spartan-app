@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Inventory;
+use App\Models\InventoryBatch; // Diubah dari Inventory
 use App\Models\Rak;
 use App\Models\StockMovement;
 use App\Models\StockMutation;
@@ -37,12 +37,11 @@ class MutationReceivingController extends Controller
     {
         $this->authorize('can-receive');
 
-        // Pastikan mutasi ini ditujukan untuk gudang user yang sedang login
         if ($mutation->gudang_tujuan_id !== Auth::user()->gudang_id) {
             abort(403, 'AKSI TIDAK DIIZINKAN.');
         }
 
-        $mutation->load(['part', 'gudangAsal', 'rakAsal', 'createdBy', 'approvedBy']);
+        $mutation->load(['part', 'gudangAsal', 'createdBy', 'approvedBy']);
         $raks = Rak::where('gudang_id', $mutation->gudang_tujuan_id)
                     ->where('is_active', true)
                     ->where('tipe_rak', 'PENYIMPANAN')
@@ -67,48 +66,53 @@ class MutationReceivingController extends Controller
             'rak_tujuan_id' => 'required|exists:raks,id',
         ]);
 
-        DB::beginTransaction();
         try {
-            // --- PROSES GUDANG TUJUAN (STOCK IN) ---
-            $destinationInventory = Inventory::firstOrCreate(
-                ['part_id' => $mutation->part_id, 'rak_id' => $validated['rak_tujuan_id']],
-                ['gudang_id' => $mutation->gudang_tujuan_id, 'quantity' => 0]
-            );
+            DB::transaction(function () use ($mutation, $validated) {
+                $jumlahMutasi = $mutation->jumlah;
 
-            $stokSebelumTujuan = $destinationInventory->quantity;
-            $jumlahMutasi = $mutation->jumlah;
+                // Buat batch baru di rak tujuan
+                $newBatch = InventoryBatch::create([
+                    'part_id' => $mutation->part_id,
+                    'rak_id' => $validated['rak_tujuan_id'],
+                    'gudang_id' => $mutation->gudang_tujuan_id,
+                    'quantity' => $jumlahMutasi,
+                    'receiving_detail_id' => null, // Tidak berasal dari PO
+                ]);
 
-            // Tambahkan stok ke inventaris tujuan
-            $destinationInventory->quantity += $jumlahMutasi;
-            $destinationInventory->save();
+                // Hitung total stok sebelumnya di gudang tujuan untuk part ini (untuk laporan kartu stok)
+                $stokSebelumTotal = InventoryBatch::where('gudang_id', $mutation->gudang_tujuan_id)
+                    ->where('part_id', $mutation->part_id)
+                    ->where('id', '!=', $newBatch->id) // Abaikan batch yang baru dibuat
+                    ->sum('quantity');
 
-            // Catat pergerakan stok masuk
-            StockMovement::create([
-                'part_id' => $mutation->part_id,
-                'gudang_id' => $mutation->gudang_tujuan_id,
-                'tipe_gerakan' => 'MUTASI_MASUK',
-                'jumlah' => $jumlahMutasi,
-                'stok_sebelum' => $stokSebelumTujuan,
-                'stok_sesudah' => $destinationInventory->quantity,
-                'referensi' => $mutation->nomor_mutasi,
-                'keterangan' => 'Penerimaan dari Gudang ' . $mutation->gudangAsal->kode_gudang,
-                'user_id' => Auth::id(),
-            ]);
+                $stokSesudahTotal = $stokSebelumTotal + $jumlahMutasi;
 
-            // --- PERBARUI STATUS MUTASI ---
-            $mutation->status = 'COMPLETED';
-            $mutation->rak_tujuan_id = $validated['rak_tujuan_id'];
-            $mutation->received_by = Auth::id();
-            $mutation->received_at = now();
-            $mutation->save();
+                // Catat pergerakan stok masuk dengan format yang benar
+                StockMovement::create([
+                    'part_id' => $mutation->part_id,
+                    'gudang_id' => $mutation->gudang_tujuan_id,
+                    'rak_id' => $newBatch->rak_id,
+                    'jumlah' => $jumlahMutasi,
+                    'stok_sebelum' => $stokSebelumTotal, // Stok total di gudang sebelum ditambah
+                    'stok_sesudah' => $stokSesudahTotal, // Stok total di gudang setelah ditambah
+                    'referensi_type' => get_class($mutation), // Menggunakan polymorphic relation
+                    'referensi_id' => $mutation->id,           // Menggunakan polymorphic relation
+                    'keterangan' => 'Mutasi Masuk dari ' . $mutation->gudangAsal->kode_gudang,
+                    'user_id' => Auth::id(),
+                ]);
 
-            DB::commit();
-
-            return redirect()->route('admin.mutation-receiving.index')->with('success', 'Barang mutasi berhasil diterima.');
-
+                // Perbarui status mutasi menjadi selesai
+                $mutation->status = 'COMPLETED';
+                $mutation->rak_tujuan_id = $validated['rak_tujuan_id'];
+                $mutation->received_by = Auth::id();
+                $mutation->received_at = now();
+                $mutation->save();
+            });
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
         }
+
+        return redirect()->route('admin.mutation-receiving.index')->with('success', 'Barang mutasi berhasil diterima.');
     }
 }
