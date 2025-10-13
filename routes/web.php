@@ -142,6 +142,7 @@
         Route::get('reports/inventory-value/export', [ReportController::class, 'exportInventoryValue'])->name('reports.inventory-value.export');
         Route::get('reports/sales-purchase-analysis', [ReportController::class, 'salesPurchaseAnalysis'])->name('reports.sales-purchase-analysis');
         Route::get('reports/stock-card/export', [ReportController::class, 'exportStockCard'])->name('reports.stock-card.export');
+        Route::get('reports/rekomendasi-po', [ReportController::class, 'rekomendasiPo'])->name('reports.rekomendasi-po');
 
 
         // === STOCK QUARANTINE ===

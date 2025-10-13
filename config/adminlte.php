@@ -339,6 +339,7 @@ return [
             'can'     => 'access-gudang-transaksi',
             'submenu' => [
                 ['text' => 'Purchase Order (PO)', 'route' => 'admin.purchase-orders.index', 'icon' => 'fas fa-fw fa-shopping-cart', 'can' => 'view-purchase-orders'],
+                ['text' => 'Rekomendasi PO', 'route' => 'admin.reports.rekomendasi-po', 'icon' => 'fas fa-fw fa-magic', 'can' => 'view-purchase-orders'],
                 ['text' => 'Penerimaan Barang', 'route' => 'admin.receivings.index', 'icon' => 'fas fa-fw fa-box-open', 'can' => 'can-receive'],
                 ['text' => 'Penerimaan Mutasi', 'route' => 'admin.mutation-receiving.index', 'icon' => 'fas fa-fw fa-people-carry', 'can' => 'can-receive-mutation'],
                 ['text' => 'Quality Control (QC)', 'route' => 'admin.qc.index', 'icon' => 'fas fa-fw fa-check-circle', 'can' => 'can-qc'],
