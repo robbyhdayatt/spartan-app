@@ -130,7 +130,7 @@
             @endif
 
             {{-- !! TAMBAHKAN TOMBOL INI !! --}}
-            <a href="{{ route('admin.purchase-orders.print', $purchaseOrder) }}" rel="noopener" target="_blank" class="btn btn-info"><i class="fas fa-print"></i> Cetak PO</a>
+            <a href="{{ route('admin.purchase-orders.pdf', $purchaseOrder) }}" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Ekspor PDF</a>
 
             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
         </div>

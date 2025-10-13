@@ -90,7 +90,7 @@ class PartController extends Controller
     {
         $this->authorize('is-super-admin');
 
-        // Tambahkan pengecekan relasi sebelum menghapus
+        // Pengecekan relasi yang sudah diperbaiki
         if ($part->inventoryBatches()->exists() || $part->penjualanDetails()->exists() || $part->purchaseOrderDetails()->exists()) {
             return redirect()->route('admin.parts.index')->with('error', 'Part tidak dapat dihapus karena sudah memiliki riwayat transaksi.');
         }
@@ -151,5 +151,51 @@ class PartController extends Controller
                 'category_name' => optional($part->category)->nama_kategori,
             ];
         }));
+    }
+
+    /**
+     * API untuk mendapatkan nomor urut part berikutnya berdasarkan brand dan kategori.
+     */
+    public function getNextPartCode(Request $request)
+    {
+        $request->validate([
+            'brand_id' => 'required|exists:brands,id',
+            'category_id' => 'required|exists:categories,id',
+        ]);
+
+        $brand = Brand::find($request->brand_id);
+        $category = Category::find($request->category_id);
+
+        // Generate Brand Code (misal: "Yamaha Genuine Part" -> "YGP")
+        $brandWords = explode(' ', $brand->nama_brand);
+        $brandCode = '';
+        foreach (array_slice($brandWords, 0, 3) as $word) {
+            $brandCode .= strtoupper(substr($word, 0, 1));
+        }
+
+        // Generate Category Code (misal: "Shock Absorber" -> "SA")
+        $categoryWords = explode(' ', $category->nama_kategori);
+        $categoryCode = '';
+        foreach (array_slice($categoryWords, 0, 2) as $word) {
+            $categoryCode .= strtoupper(substr($word, 0, 1));
+        }
+
+        $prefix = $brandCode . '-' . $categoryCode . '-';
+
+        // Cari part terakhir dengan prefix yang sama
+        $lastPart = Part::where('kode_part', 'LIKE', $prefix . '%')
+                        ->orderBy(DB::raw('LENGTH(kode_part)'), 'DESC')
+                        ->orderBy('kode_part', 'DESC')
+                        ->first();
+
+        $nextNumber = 1;
+        if ($lastPart) {
+            $lastNumber = (int)str_replace($prefix, '', $lastPart->kode_part);
+            $nextNumber = $lastNumber + 1;
+        }
+
+        $nextPartCode = $prefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+
+        return response()->json(['next_part_code' => $nextPartCode]);
     }
 }

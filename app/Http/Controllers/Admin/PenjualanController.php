@@ -143,16 +143,7 @@ class PenjualanController extends Controller
         return view('admin.penjualans.show', compact('penjualan'));
     }
 
-    public function print(Penjualan $penjualan)
-    {
-        $this->authorize('view-sales');
-        $penjualan->load(['konsumen', 'gudang', 'sales', 'details.part']);
-        return view('admin.penjualans.print', compact('penjualan'));
-    }
-
     // --- API Methods ---
-
-    // --- PERBAIKAN UTAMA DI FUNGSI INI ---
     public function getPartsByGudang(Gudang $gudang)
     {
         $parts = Part::whereHas('inventoryBatches', function ($query) use ($gudang) {

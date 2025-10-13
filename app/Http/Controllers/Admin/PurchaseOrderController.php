@@ -140,13 +140,6 @@ class PurchaseOrderController extends Controller
         return view('admin.purchase_orders.show', compact('purchaseOrder', 'creatorName'));
     }
 
-    public function print(PurchaseOrder $purchaseOrder)
-    {
-        // Pastikan semua relasi yang dibutuhkan sudah ter-load
-        $purchaseOrder->load(['supplier', 'gudang', 'details.part', 'createdBy', 'approvedBy']);
-        return view('admin.purchase_orders.print', compact('purchaseOrder'));
-    }
-
     private function generatePoNumber()
     {
         $date = now()->format('Ymd');

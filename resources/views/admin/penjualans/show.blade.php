@@ -11,7 +11,7 @@
     <div class="card-header">
         <h3 class="card-title">Informasi Transaksi</h3>
         <div class="card-tools">
-            <a href="{{ route('admin.penjualans.print', $penjualan) }}" target="_blank" class="btn btn-info btn-sm"><i class="fas fa-print"></i> Cetak</a>
+            <a href="{{ route('admin.penjualans.pdf', $penjualan) }}" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Ekspor PDF</a>
             <a href="{{ route('admin.penjualans.index') }}" class="btn btn-secondary btn-sm">Kembali ke Daftar</a>
         </div>
     </div>

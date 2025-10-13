@@ -21,14 +21,19 @@ class Part extends Model
         return $this->belongsTo(Category::class);
     }
 
-    public function inventories()
-    {
-        return $this->hasMany(Inventory::class);
-    }
-
-    // --- TAMBAHKAN FUNGSI RELASI BARU DI BAWAH INI ---
     public function inventoryBatches()
     {
         return $this->hasMany(InventoryBatch::class);
+    }
+
+    // ++ TAMBAHKAN DUA FUNGSI INI ++
+    public function penjualanDetails()
+    {
+        return $this->hasMany(PenjualanDetail::class);
+    }
+
+    public function purchaseOrderDetails()
+    {
+        return $this->hasMany(PurchaseOrderDetail::class);
     }
 }
