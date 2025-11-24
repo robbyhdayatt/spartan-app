@@ -6,54 +6,38 @@
 @section('content')
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title">Transaksi Penjualan</h3>
-        <div class="card-tools">
-            @can('manage-sales')
-            <a href="{{ route('admin.penjualans.create') }}" class="btn btn-primary btn-sm">Buat Penjualan Baru</a>
-            @endcan
-        </div>
+        <a href="{{ route('admin.penjualans.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Buat Penjualan Baru</a>
     </div>
     <div class="card-body">
-        <table id="penjualans-table" class="table table-bordered">
+        <table class="table table-bordered table-striped" id="table-penjualan">
             <thead>
                 <tr>
-                    <th>No. Faktur</th>
+                    <th>No Faktur</th>
                     <th>Tanggal</th>
-                    <th>Konsumen</th>
-                    <th>Sales</th>
-                    <th>Total</th>
-                    <th style="width: 100px">Aksi</th>
+                    <th>Konsumen</th> {{-- Judul kolom tetap Konsumen --}}
+                    <th>Total Harga</th>
+                    <th>Sales/Admin</th>
+                    <th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($penjualans as $penjualan)
+                @foreach($penjualans as $p)
                 <tr>
-                    <td>{{ $penjualan->nomor_faktur }}</td>
-                    <td>{{ \Carbon\Carbon::parse($penjualan->tanggal_jual)->format('d-m-Y') }}</td>
-                    <td>{{ $penjualan->konsumen->nama_konsumen }}</td>
-                    <td>{{ $penjualan->sales->nama ?? 'Tanpa Sales' }}</td>
-                    <td>Rp {{ number_format($penjualan->total_harga, 0, ',', '.') }}</td>
+                    <td>{{ $p->nomor_faktur }}</td>
+                    <td>{{ $p->tanggal_jual->format('d-m-Y') }}</td>
+                    
+                    {{-- MODIFIKASI: Panggil kolom string langsung --}}
+                    <td>{{ $p->nama_konsumen }}</td>
+                    
+                    <td>Rp {{ number_format($p->total_harga, 0, ',', '.') }}</td>
+                    <td>{{ $p->sales->nama ?? '-' }}</td>
                     <td>
-                        <a href="{{ route('admin.penjualans.show', $penjualan->id) }}" class="btn btn-info btn-xs">Lihat</a>
+                        <a href="{{ route('admin.penjualans.show', $p->id) }}" class="btn btn-info btn-sm"><i class="fas fa-eye"></i></a>
                     </td>
                 </tr>
-                @empty
-                <tr>
-                    <td colspan="6" class="text-center">Belum ada transaksi penjualan.</td>
-                </tr>
-                @endforelse
+                @endforeach
             </tbody>
         </table>
     </div>
 </div>
-@stop
-
-@section('js')
-<script>
-    $(document).ready(function() {
-        $('#penjualans-table').DataTable({
-            "responsive": true,
-        });
-    });
-</script>
 @stop

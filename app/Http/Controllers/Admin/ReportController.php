@@ -282,9 +282,4 @@ class ReportController extends Controller
             $request->end_date
         ), $fileName);
     }
-
-    public function rekomendasiPo()
-    {
-        return view('admin.reports.rekomendasi_po');
-    }
 }

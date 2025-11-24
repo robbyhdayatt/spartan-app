@@ -1,9 +1,9 @@
 @extends('adminlte::page')
 
-@section('title', 'Buat Penjualan Baru (FIFO)')
+@section('title', 'Buat Penjualan Baru')
 
 @section('content_header')
-    <h1>Buat Penjualan Baru (FIFO)</h1>
+    <h1>Buat Penjualan Baru (Manual)</h1>
 @stop
 
 @section('content')
@@ -11,18 +11,12 @@
     <form action="{{ route('admin.penjualans.store') }}" method="POST">
         @csrf
         <div class="card-body">
-            {{-- Blok Error --}}
             @if ($errors->any())
                 <div class="alert alert-danger">
                     <ul class="mb-0">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
+                        @foreach ($errors->all() as $error) <li>{{ $error }}</li> @endforeach
                     </ul>
                 </div>
-            @endif
-            @if(session('error'))
-                 <div class="alert alert-danger">{{ session('error') }}</div>
             @endif
 
             {{-- Header Form --}}
@@ -36,15 +30,19 @@
                         @endforeach
                     </select>
                 </div>
+                
+                {{-- INPUT MANUAL NAMA KONSUMEN --}}
                 <div class="col-md-4 form-group">
-                    <label for="konsumen_id">Konsumen <span class="text-danger">*</span></label>
-                    <select class="form-control select2bs4" id="konsumen_id" name="konsumen_id" required>
-                        <option value="">Pilih Konsumen</option>
-                        @foreach($konsumens as $konsumen)
-                            <option value="{{ $konsumen->id }}" {{ old('konsumen_id') == $konsumen->id ? 'selected' : '' }}>{{ $konsumen->nama_konsumen }}</option>
-                        @endforeach
-                    </select>
+                    <label for="nama_konsumen">Nama Konsumen <span class="text-danger">*</span></label>
+                    <input type="text" 
+                        class="form-control" 
+                        id="nama_konsumen" 
+                        name="nama_konsumen" 
+                        placeholder="Masukkan Nama Pembeli / Toko" 
+                        value="{{ old('nama_konsumen') }}" 
+                        required>
                 </div>
+
                 <div class="col-md-4 form-group">
                     <label for="tanggal_jual">Tanggal Jual <span class="text-danger">*</span></label>
                     <input type="date" class="form-control" id="tanggal_jual" name="tanggal_jual" value="{{ old('tanggal_jual', date('Y-m-d')) }}" required>
@@ -52,7 +50,9 @@
             </div>
 
             <hr>
-
+            {{-- (SISA KODE VIEW SAMA PERSIS DENGAN SEBELUMNYA: BAGIAN PILIH PART, TABEL, TOTALAN, DLL) --}}
+            {{-- ... --}}
+            
             {{-- Input Part --}}
             <div class="row align-items-end">
                 <div class="col-md-5 form-group">
@@ -74,15 +74,16 @@
 
             <h5>Detail Part yang Akan Dijual</h5>
             <div class="table-responsive">
-                <table class="table table-bordered">
+                <table class="table table-bordered table-striped">
                     <thead>
                         <tr>
-                            <th style="width: 30%;">Part</th>
-                            <th style="width: 20%;">Rak (Otomatis FIFO)</th>
+                            <th style="width: 25%;">Part</th>
+                            <th style="width: 15%;">Rak (Otomatis FIFO)</th>
                             <th style="width: 10%;">Qty</th>
-                            <th>Harga Jual</th>
-                            <th>Subtotal</th>
-                            <th>Aksi</th>
+                            <th style="width: 15%;">Harga Jual (Satuan)</th>
+                            <th style="width: 15%;">Diskon Manual (Rp/Item)</th>
+                            <th style="width: 15%;">Subtotal</th>
+                            <th style="width: 5%;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="parts-container">
@@ -98,20 +99,29 @@
                         <table class="table">
                             <tr><th style="width:50%">Subtotal:</th><td class="text-right" id="subtotal-text">Rp 0</td></tr>
                             <tr><th>Total Diskon:</th><td class="text-right text-success" id="diskon-text">Rp 0</td></tr>
-                            <tr><th><div class="form-check"><input class="form-check-input" type="checkbox" id="ppn-checkbox" name="use_ppn" value="1" checked><label class="form-check-label" for="ppn-checkbox">PPN (11%)</label></div></th><td class="text-right" id="pajak-text">Rp 0</td></tr>
+                            <tr>
+                                <th>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ppn-checkbox" name="use_ppn" value="1" checked>
+                                        <label class="form-check-label" for="ppn-checkbox">PPN (11%)</label>
+                                    </div>
+                                </th>
+                                <td class="text-right" id="pajak-text">Rp 0</td>
+                            </tr>
                             <tr><th>Total Keseluruhan:</th><td class="text-right h4" id="total-text">Rp 0</td></tr>
                         </table>
                     </div>
                 </div>
             </div>
 
+            {{-- Hidden Inputs untuk Backend --}}
             <input type="hidden" name="subtotal" id="subtotal-input" value="0">
             <input type="hidden" name="total_diskon" id="diskon-input" value="0">
             <input type="hidden" name="pajak" id="pajak-input" value="0">
             <input type="hidden" name="total_harga" id="total-harga-input" value="0">
         </div>
         <div class="card-footer text-right">
-            <button type="submit" class="btn btn-primary">Simpan Penjualan</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Simpan Penjualan</button>
         </div>
     </form>
 </div>
@@ -122,8 +132,9 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    let partsData = {};
+    let partsData = [];
     let itemIndex = 0;
+    
     $('.select2bs4').select2({ theme: 'bootstrap4' });
 
     function formatRupiah(angka) {
@@ -142,24 +153,39 @@ $(document).ready(function() {
     function calculateTotal() {
         let subtotal = 0;
         let totalDiskon = 0;
+
         $('.part-row').each(function() {
-            let hargaFinal = parseFloat($(this).find('.harga-final-input').val()) || 0;
-            let hargaOriginal = parseFloat($(this).find('.harga-original-input').val()) || hargaFinal;
+            let hargaJual = parseFloat($(this).find('.harga-jual-input').val()) || 0;
             let qty = parseInt($(this).find('.qty-input').val()) || 0;
-            totalDiskon += (hargaOriginal - hargaFinal) * qty;
-            let subtotalRow = hargaFinal * qty;
+            let diskonPerItem = parseFloat($(this).find('.input-diskon').val()) || 0;
+
+            if(diskonPerItem > hargaJual) {
+                diskonPerItem = hargaJual;
+                $(this).find('.input-diskon').val(hargaJual);
+            }
+
+            let hargaNet = hargaJual - diskonPerItem;
+            let subtotalRow = hargaNet * qty;
+            let diskonRow = diskonPerItem * qty;
+
             $(this).find('.subtotal-row-text').text(formatRupiah(subtotalRow));
+            
             subtotal += subtotalRow;
+            totalDiskon += diskonRow;
         });
+
         let pajak = 0;
         if ($('#ppn-checkbox').is(':checked')) {
             pajak = subtotal * 0.11;
         }
+
         let total = subtotal + pajak;
+
         $('#subtotal-text').text(formatRupiah(subtotal));
         $('#diskon-text').text(formatRupiah(totalDiskon));
         $('#pajak-text').text(formatRupiah(pajak));
         $('#total-text').text(formatRupiah(total));
+
         $('#subtotal-input').val(subtotal);
         $('#diskon-input').val(totalDiskon);
         $('#pajak-input').val(pajak);
@@ -169,105 +195,107 @@ $(document).ready(function() {
     $('#gudang_id').on('change', function() {
         let gudangId = $(this).val();
         let partSelector = $('#part-selector');
+        
         partSelector.prop('disabled', true).html('<option>Memuat...</option>');
+        
         if (!gudangId) {
             partSelector.html('<option>Pilih Gudang Terlebih Dahulu</option>');
             return;
         }
+
         $.ajax({
             url: `{{ url('admin/api/gudangs') }}/${gudangId}/parts`,
             success: function(parts) {
                 partsData = parts;
                 partSelector.prop('disabled', false).html('<option value="">Pilih Part</option>');
                 parts.forEach(part => {
-                    partSelector.append(`<option value="${part.id}" data-total-stock="${part.total_stock}">${part.kode_part} - ${part.nama_part} (Stok: ${part.total_stock})</option>`);
+                    partSelector.append(`<option value="${part.id}">${part.kode_part} - ${part.nama_part} (Stok: ${part.total_stock})</option>`);
                 });
             },
             error: function() { partSelector.html('<option>Gagal memuat part</option>'); }
         });
     });
 
+    // Tombol Tambah Part
     $('#add-part-btn').on('click', function() {
         let partId = $('#part-selector').val();
         let qtyJual = parseInt($('#qty-selector').val());
         let gudangId = $('#gudang_id').val();
-        let konsumenId = $('#konsumen_id').val();
+        // Hapus validasi Konsumen ID
+        let namaKonsumen = $('#nama_konsumen').val();
 
-        if (!partId || !qtyJual || qtyJual <= 0 || !konsumenId) {
-            alert('Silakan pilih Gudang, Konsumen, Part, dan isi jumlah yang valid.');
+        if (!partId || !qtyJual || qtyJual <= 0 || !namaKonsumen) {
+            alert('Silakan lengkapi Gudang, Nama Konsumen, Part, dan Jumlah.');
             return;
         }
 
-        // Cek duplikat
         if ($(`.part-row[data-part-id="${partId}"]`).length > 0) {
-            alert('Part ini sudah ditambahkan. Hapus terlebih dahulu jika ingin mengubah jumlah.');
+            alert('Part ini sudah ada di daftar.');
             return;
         }
 
-        // Ambil data batch
+        let selectedPart = partsData.find(p => p.id == partId);
+        if (!selectedPart) return;
+
         $.ajax({
             url: `{{ route('admin.api.get-fifo-batches') }}`,
             data: { part_id: partId, gudang_id: gudangId },
             success: function(batches) {
-                // Ambil harga diskon
-                $.ajax({
-                    url: '{{ route("admin.api.calculate-discount") }}',
-                    data: { part_id: partId, konsumen_id: konsumenId },
-                    success: function(response) {
-                        if (!response.success) {
-                            alert('Gagal menghitung harga diskon.');
-                            return;
-                        }
+                let sisaQty = qtyJual;
+                let hargaJual = parseFloat(selectedPart.harga_jual);
 
-                        let sisaQty = qtyJual;
-                        let hargaFinal = response.data.final_price;
-                        let hargaOriginal = response.data.original_price;
+                for (const batch of batches) {
+                    if (sisaQty <= 0) break;
+                    let qtyAmbil = Math.min(sisaQty, batch.quantity);
 
-                        for (const batch of batches) {
-                            if (sisaQty <= 0) break;
-                            let qtyAmbil = Math.min(sisaQty, batch.quantity);
+                    let newRowHtml = `
+                        <tr class="part-row" data-part-id="${partId}">
+                            <td>
+                                ${selectedPart.kode_part} - ${selectedPart.nama_part}
+                                <input type="hidden" name="items[${itemIndex}][part_id]" value="${partId}">
+                                <input type="hidden" name="items[${itemIndex}][batch_id]" value="${batch.id}">
+                            </td>
+                            <td>${batch.rak.kode_rak}</td>
+                            <td>
+                                <input type="number" class="form-control qty-input" name="items[${itemIndex}][qty_jual]" value="${qtyAmbil}" readonly>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control harga-jual-input" value="${hargaJual}" readonly>
+                                <small class="text-muted">Rp ${formatRupiah(hargaJual)}</small>
+                            </td>
+                            <td>
+                                <input type="number" name="items[${itemIndex}][diskon]" class="form-control input-diskon" placeholder="0" min="0" value="0">
+                            </td>
+                            <td class="text-right subtotal-row-text">${formatRupiah(hargaJual * qtyAmbil)}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm remove-part-btn"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                    
+                    $('#parts-container').append(newRowHtml);
+                    sisaQty -= qtyAmbil;
+                    itemIndex++;
+                }
 
-                            let newRowHtml = `
-                                <tr class="part-row" data-part-id="${partId}">
-                                    <td>
-                                        ${partsData.find(p => p.id == partId).nama_part}
-                                        <input type="hidden" name="items[${itemIndex}][part_id]" value="${partId}">
-                                        <input type="hidden" name="items[${itemIndex}][batch_id]" value="${batch.id}">
-                                        <input type="hidden" class="harga-original-input" value="${hargaOriginal}">
-                                        <input type="hidden" class="harga-final-input" value="${hargaFinal}">
-                                    </td>
-                                    <td>${batch.rak.kode_rak}</td>
-                                    <td><input type="number" class="form-control qty-input" name="items[${itemIndex}][qty_jual]" value="${qtyAmbil}" readonly></td>
-                                    <td class="text-right">${formatRupiah(hargaFinal)}</td>
-                                    <td class="text-right subtotal-row-text">${formatRupiah(hargaFinal * qtyAmbil)}</td>
-                                    <td><button type="button" class="btn btn-danger btn-sm remove-part-btn"><i class="fas fa-trash"></i></button></td>
-                                </tr>
-                            `;
-                            $('#parts-container').append(newRowHtml);
-                            sisaQty -= qtyAmbil;
-                            itemIndex++;
-                        }
+                if (sisaQty > 0) {
+                    alert(`Peringatan: Stok tidak cukup. ${sisaQty} unit gagal ditambahkan.`);
+                }
 
-                        if (sisaQty > 0) {
-                            alert(`Stok tidak mencukupi. Hanya tersedia ${qtyJual - sisaQty} unit.`);
-                        }
-
-                        calculateTotal();
-                        $('#part-selector').val('').trigger('change');
-                        $('#qty-selector').val('');
-                    }
-                });
+                calculateTotal();
+                $('#part-selector').val('').trigger('change');
+                $('#qty-selector').val('');
             }
         });
     });
 
     $('#parts-container').on('click', '.remove-part-btn', function() {
-        let partId = $(this).closest('tr').data('part-id');
-        $(`tr[data-part-id="${partId}"]`).remove();
+        $(this).closest('tr').remove();
         calculateTotal();
     });
 
     $('#ppn-checkbox').on('change', calculateTotal);
+    $(document).on('keyup change', '.input-diskon', calculateTotal);
 });
 </script>
 @stop

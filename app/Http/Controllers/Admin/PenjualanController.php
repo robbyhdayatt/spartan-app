@@ -4,17 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Penjualan;
-use App\Models\Konsumen;
 use App\Models\Gudang;
-use App\Models\User;
 use App\Models\Part;
 use App\Models\InventoryBatch;
-use App\Models\Jabatan;
-use App\Models\StockMovement;
+use App\Services\DiscountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Services\DiscountService;
 
 class PenjualanController extends Controller
 {
@@ -28,7 +24,16 @@ class PenjualanController extends Controller
     public function index()
     {
         $this->authorize('view-sales');
-        $penjualans = Penjualan::with(['konsumen', 'sales'])->latest()->get();
+        $user = Auth::user();
+        
+        // Hapus relasi 'konsumen' dari eager load
+        $query = Penjualan::with(['sales']); 
+
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
+            $query->where('gudang_id', $user->gudang_id);
+        }
+
+        $penjualans = $query->latest()->get();
         return view('admin.penjualans.index', compact('penjualans'));
     }
 
@@ -36,15 +41,16 @@ class PenjualanController extends Controller
     {
         $this->authorize('manage-sales');
         $user = Auth::user();
-        $konsumens = Konsumen::where('is_active', true)->orderBy('nama_konsumen')->get();
-
-        if ($user->jabatan->nama_jabatan === 'Sales') {
-            $gudangs = Gudang::where('id', $user->gudang_id)->get();
-        } else {
+        
+        // Tidak perlu ambil data konsumen dari DB lagi
+        
+        if (in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $gudangs = Gudang::where('is_active', true)->get();
+        } else {
+            $gudangs = Gudang::where('id', $user->gudang_id)->get();
         }
 
-        return view('admin.penjualans.create', compact('konsumens', 'gudangs'));
+        return view('admin.penjualans.create', compact('gudangs'));
     }
 
     public function store(Request $request)
@@ -53,17 +59,18 @@ class PenjualanController extends Controller
 
         $validated = $request->validate([
             'gudang_id' => 'required|exists:gudangs,id',
-            'konsumen_id' => 'required|exists:konsumens,id',
+            'nama_konsumen' => 'required|string|max:150', // Validasi String Manual
             'tanggal_jual' => 'required|date',
             'items' => 'required|array|min:1',
             'items.*.part_id' => 'required|exists:parts,id',
             'items.*.batch_id' => 'required|exists:inventory_batches,id',
             'items.*.qty_jual' => 'required|integer|min:1',
+            'items.*.diskon' => 'nullable|numeric|min:0',
+            'pajak' => 'nullable|numeric|min:0'
         ]);
 
         DB::beginTransaction();
         try {
-            $konsumen = Konsumen::find($validated['konsumen_id']);
             $totalSubtotalServer = 0;
             $totalDiskonServer = 0;
 
@@ -71,7 +78,7 @@ class PenjualanController extends Controller
                 'nomor_faktur' => Penjualan::generateNomorFaktur(),
                 'tanggal_jual' => $validated['tanggal_jual'],
                 'gudang_id' => $validated['gudang_id'],
-                'konsumen_id' => $validated['konsumen_id'],
+                'nama_konsumen' => $validated['nama_konsumen'], // Simpan Nama Manual
                 'sales_id' => auth()->id(),
                 'created_by' => auth()->id(),
             ]);
@@ -79,18 +86,27 @@ class PenjualanController extends Controller
             foreach ($validated['items'] as $item) {
                 $part = Part::find($item['part_id']);
                 $qty = (int)$item['qty_jual'];
+                $manualDiscount = isset($item['diskon']) ? (float)$item['diskon'] : 0;
                 $batch = InventoryBatch::findOrFail($item['batch_id']);
 
                 if ($batch->quantity < $qty) {
-                    throw new \Exception("Stok di batch untuk part '{$part->nama_part}' tidak mencukupi.");
+                    throw new \Exception("Stok part '{$part->nama_part}' tidak cukup.");
                 }
 
-                $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $part->harga_jual_default);
+                // Kirim null sebagai konsumen
+                $discountResult = $this->discountService->calculateSalesDiscount(
+                    $part, 
+                    null, 
+                    $part->harga_jual_default, 
+                    $manualDiscount
+                );
+
                 $finalPrice = $discountResult['final_price'];
+                $appliedDiscount = $discountResult['discount_amount'];
                 $itemSubtotal = $finalPrice * $qty;
 
                 $totalSubtotalServer += $itemSubtotal;
-                $totalDiskonServer += ($part->harga_jual_default - $finalPrice) * $qty;
+                $totalDiskonServer += ($appliedDiscount * $qty);
 
                 $stokSebelum = $batch->quantity;
                 $batch->decrement('quantity', $qty);
@@ -99,7 +115,8 @@ class PenjualanController extends Controller
                     'part_id' => $part->id,
                     'rak_id' => $batch->rak_id,
                     'qty_jual' => $qty,
-                    'harga_jual' => $finalPrice,
+                    'harga_jual' => $part->harga_jual_default,
+                    'diskon' => $appliedDiscount,
                     'subtotal' => $itemSubtotal,
                 ]);
 
@@ -111,13 +128,14 @@ class PenjualanController extends Controller
                     'stok_sebelum' => $stokSebelum,
                     'stok_sesudah' => $batch->quantity,
                     'user_id' => auth()->id(),
-                    'keterangan' => 'Penjualan via Faktur #' . $penjualan->nomor_faktur,
+                    'keterangan' => 'Penjualan #' . $penjualan->nomor_faktur,
                 ]);
             }
 
             InventoryBatch::where('quantity', '<=', 0)->delete();
 
-            $pajak = ($request->pajak > 0) ? $totalSubtotalServer * 0.11 : 0;
+            $usePpn = $request->has('use_ppn') && $request->use_ppn == '1';
+            $pajak = $usePpn ? ($totalSubtotalServer * 0.11) : 0;
             $totalHarga = $totalSubtotalServer + $pajak;
 
             $penjualan->update([
@@ -128,18 +146,18 @@ class PenjualanController extends Controller
             ]);
 
             DB::commit();
-            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Transaksi penjualan FIFO berhasil disimpan.');
+            return redirect()->route('admin.penjualans.show', $penjualan)->with('success', 'Penjualan berhasil disimpan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Error: ' . $e->getMessage())->withInput();
         }
     }
 
     public function show(Penjualan $penjualan)
     {
         $this->authorize('view-sales');
-        $penjualan->load(['konsumen', 'gudang', 'sales', 'details.part', 'details.rak']);
+        $penjualan->load(['gudang', 'sales', 'details.part', 'details.rak']);
         return view('admin.penjualans.show', compact('penjualan'));
     }
 
@@ -159,10 +177,10 @@ class PenjualanController extends Controller
                 'id' => $part->id,
                 'kode_part' => $part->kode_part,
                 'nama_part' => $part->nama_part,
+                'harga_jual' => $part->harga_jual_default,
                 'total_stock' => (int) $part->inventory_batches_sum_quantity,
             ];
         });
-
         return response()->json($parts);
     }
 
@@ -179,7 +197,10 @@ class PenjualanController extends Controller
             ->with(['rak', 'receivingDetail.receiving'])
             ->get()
             ->sortBy(function($batch) {
-                return $batch->receivingDetail->receiving->tanggal_terima->format('Y-m-d') . '_' . str_pad($batch->receiving_detail_id, 8, '0', STR_PAD_LEFT);
+                $date = $batch->receivingDetail && $batch->receivingDetail->receiving 
+                        ? $batch->receivingDetail->receiving->tanggal_terima->format('Y-m-d') 
+                        : '2000-01-01';
+                return $date . '_' . str_pad($batch->id, 8, '0', STR_PAD_LEFT);
             });
 
         return response()->json($batches->values()->all());
@@ -187,15 +208,6 @@ class PenjualanController extends Controller
 
     public function calculateDiscount(Request $request)
     {
-        $request->validate(['part_id' => 'required|exists:parts,id', 'konsumen_id' => 'required|exists:konsumens,id']);
-        try {
-            $part = Part::findOrFail($request->part_id);
-            $konsumen = Konsumen::findOrFail($request->konsumen_id);
-            $basePrice = $part->harga_jual_default;
-            $discountResult = $this->discountService->calculateSalesDiscount($part, $konsumen, $basePrice);
-            return response()->json(['success' => true, 'data' => $discountResult]);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Gagal menghitung diskon: ' . $e->getMessage()], 500);
-        }
+        return response()->json(['success' => true]);
     }
 }

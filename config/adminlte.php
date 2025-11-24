@@ -300,12 +300,9 @@ return [
 
     // config/adminlte.php
 
-    'menu' => [
-        // Tombol search & fullscreen
+'menu' => [
         ['search' => true, 'topnav' => true],
         ['type' => 'fullscreen-widget', 'topnav_right' => true],
-
-        // Menu Utama
         [
             'text' => 'Dashboard',
             'route'  => 'admin.home',
@@ -317,7 +314,7 @@ return [
             'icon' => 'fas fa-fw fa-user',
         ],
 
-        // SUBMENU: Master Data & Produk
+        // SUBMENU: Master Data
         [
             'text'    => 'Master Data',
             'icon'    => 'fas fa-fw fa-database',
@@ -339,7 +336,7 @@ return [
             'can'     => 'access-gudang-transaksi',
             'submenu' => [
                 ['text' => 'Purchase Order (PO)', 'route' => 'admin.purchase-orders.index', 'icon' => 'fas fa-fw fa-shopping-cart', 'can' => 'view-purchase-orders'],
-                ['text' => 'Rekomendasi PO', 'route' => 'admin.reports.rekomendasi-po', 'icon' => 'fas fa-fw fa-magic', 'can' => 'view-purchase-orders'],
+                // MENU REKOMENDASI PO DIHAPUS DARI SINI
                 ['text' => 'Penerimaan Barang', 'route' => 'admin.receivings.index', 'icon' => 'fas fa-fw fa-box-open', 'can' => 'can-receive'],
                 ['text' => 'Penerimaan Mutasi', 'route' => 'admin.mutation-receiving.index', 'icon' => 'fas fa-fw fa-people-carry', 'can' => 'can-receive-mutation'],
                 ['text' => 'Quality Control (QC)', 'route' => 'admin.qc.index', 'icon' => 'fas fa-fw fa-check-circle', 'can' => 'can-qc'],
@@ -351,38 +348,19 @@ return [
             ],
         ],
 
-        // SUBMENU: Penjualan & Pelanggan
+        // SUBMENU: Penjualan (Tanpa Menu Konsumen)
         [
-            'text' => 'Penjualan & Pelanggan',
+            'text' => 'Penjualan',
             'icon' => 'fas fa-fw fa-users',
             'can'  => 'access-penjualan-pelanggan',
             'submenu' => [
-                ['text' => 'Penjualan', 'route' => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => 'view-sales'],
+                ['text' => 'Daftar Penjualan', 'route' => 'admin.penjualans.index', 'icon' => 'fas fa-fw fa-cash-register', 'can' => 'view-sales'],
                 ['text' => 'Retur Penjualan', 'route' => 'admin.sales-returns.index', 'icon' => 'fas fa-fw fa-undo', 'can' => 'view-sales-returns'],
-                ['text' => 'Konsumen', 'route' => 'admin.konsumens.index', 'icon' => 'fas fa-fw fa-address-book', 'can' => ['is-super-admin', 'is-sales']],
-                ['text' => 'Kategori Diskon Konsumen', 'route' => 'admin.customer-discount-categories.index', 'icon' => 'fas fa-fw fa-tags', 'can' => 'is-manager'],
+                // MENU KONSUMEN DIHAPUS DARI SINI
             ],
         ],
 
-        // SUBMENU: Marketing
-        [
-            'text' => 'Marketing',
-            'icon' => 'fas fa-fw fa-bullhorn',
-            'can'  => 'access-marketing',
-            'submenu' => [
-                ['text' => 'Manajemen Campaign', 'route' => 'admin.campaigns.index', 'can' => 'is-manager'],
-                [
-                    'text'    => 'Insentif Sales',
-                    'can'     => 'is-manager',
-                    'submenu' => [
-                        ['text' => 'Set Target Penjualan', 'route' => 'admin.incentives.targets'],
-                        ['text' => 'Laporan Insentif', 'route' => 'admin.incentives.report'],
-                    ],
-                ],
-            ],
-        ],
-
-        // SUBMENU: Laporan
+        // SUBMENU: Laporan (Tetap sama)
         [
             'text'    => 'Laporan',
             'icon'    => 'fas fa-fw fa-chart-pie',

@@ -12,15 +12,16 @@ use App\Models\Rak;
 
 class QcController extends Controller
 {
-
     public function index()
     {
+        // Gate 'can-qc' sudah dimapping ke AG di AuthServiceProvider
         $this->authorize('can-qc');
         $user = Auth::user();
 
-        $query = \App\Models\Receiving::where('status', 'PENDING_QC')
-                                        ->with(['purchaseOrder', 'gudang']);
+        $query = Receiving::where('status', 'PENDING_QC')
+                          ->with(['purchaseOrder', 'gudang']);
 
+        // Jika user bukan Super Admin atau Manager, batasi data hanya gudang user tersebut
         if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
@@ -33,9 +34,17 @@ class QcController extends Controller
     public function showQcForm(Receiving $receiving)
     {
         $this->authorize('can-qc');
+        
+        // Validasi akses gudang: AG Gudang A tidak boleh QC barang Gudang B
+        $user = Auth::user();
+        if (!in_array($user->jabatan->singkatan, ['SA', 'MA']) && $receiving->gudang_id !== $user->gudang_id) {
+            abort(403, 'Anda tidak memiliki akses ke data gudang ini.');
+        }
+
         if ($receiving->status !== 'PENDING_QC') {
             return redirect()->route('admin.qc.index')->with('error', 'Penerimaan ini sudah diproses QC.');
         }
+        
         $receiving->load(['details.part']);
         return view('admin.qc.form', compact('receiving'));
     }
@@ -63,7 +72,7 @@ class QcController extends Controller
                 $totalInput = $qtyLolos + $qtyGagal;
 
                 if ($totalInput > $detail->qty_terima) {
-                    throw new \Exception('Jumlah Lolos & Gagal QC (' . $totalInput . ') melebihi jumlah diterima (' . $detail->qty_terima . ') untuk part ' . $detail->part->nama_part);
+                    throw new \Exception('Jumlah QC (' . $totalInput . ') melebihi jumlah diterima (' . $detail->qty_terima . ') untuk part ' . $detail->part->nama_part);
                 }
 
                 $detail->update([
@@ -74,49 +83,50 @@ class QcController extends Controller
 
                 $totalLolos += $qtyLolos;
 
-                // Logika untuk sisa barang yang tidak di-QC tetap sama
-                $sisa = $detail->qty_terima - $totalInput;
-                if ($sisa > 0) {
+                // Handle Barang Gagal -> Masuk Rak Karantina
+                $sisa = $detail->qty_terima - $qtyLolos; // Asumsi sisa (gagal + belum di QC) masuk logika karantina sementara
+                // Jika logika bisnisnya Gagal QC = Karantina:
+                if ($qtyGagal > 0) {
                     $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
                                         ->where('kode_rak', 'like', '%-KRN-QC')
                                         ->first();
+                    
                     if (!$quarantineRak) {
-                        throw new \Exception('Rak karantina (dengan akhiran kode -KRN-QC) tidak ditemukan di gudang ini.');
+                        // Fallback jika rak khusus QC tidak ada, cari sembarang rak tipe QUARANTINE
+                        $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
+                                            ->where('tipe_rak', 'QUARANTINE')
+                                            ->first();
                     }
 
+                    if (!$quarantineRak) {
+                        throw new \Exception('Rak karantina belum disetting di gudang ini.');
+                    }
+
+                    // Masukkan ke Inventory (bukan Batch, karena ini barang reject)
                     $inventory = \App\Models\Inventory::firstOrCreate(
                         ['part_id' => $detail->part_id, 'rak_id' => $quarantineRak->id],
                         ['gudang_id' => $receiving->gudang_id, 'quantity' => 0]
                     );
 
                     $stokSebelum = $inventory->quantity;
-                    $inventory->increment('quantity', $sisa);
+                    $inventory->increment('quantity', $qtyGagal);
 
                     \App\Models\StockMovement::create([
                         'part_id' => $detail->part_id,
                         'gudang_id' => $receiving->gudang_id,
                         'rak_id' => $quarantineRak->id,
                         'tipe_gerakan' => 'KARANTINA_QC',
-                        'jumlah' => $sisa,
+                        'jumlah' => $qtyGagal,
                         'stok_sebelum' => $stokSebelum,
                         'stok_sesudah' => $inventory->quantity,
-                        'referensi' => 'Receiving:' . $receiving->id,
+                        'referensi' => 'QC Receiving:' . $receiving->id,
                         'user_id' => Auth::id(),
-                        'keterangan' => 'Sisa barang dari proses QC otomatis masuk karantina.',
+                        'keterangan' => 'Barang gagal QC saat penerimaan.',
                     ]);
                 }
             }
 
-            // Cek apakah ada barang yang lolos QC.
-            if ($totalLolos > 0) {
-                // Jika ada, maka siap untuk Putaway.
-                $receiving->status = 'PENDING_PUTAWAY';
-            } else {
-                // Jika tidak ada sama sekali, proses penerimaan ini selesai.
-                // Barang yang gagal akan diproses di menu Retur Pembelian.
-                $receiving->status = 'COMPLETED';
-            }
-
+            $receiving->status = ($totalLolos > 0) ? 'PENDING_PUTAWAY' : 'COMPLETED';
             $receiving->qc_by = Auth::id();
             $receiving->qc_at = now();
             $receiving->save();
@@ -126,7 +136,7 @@ class QcController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'GAGAL DISIMPAN: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Error: ' . $e->getMessage())->withInput();
         }
     }
 }

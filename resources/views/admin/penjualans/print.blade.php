@@ -50,7 +50,7 @@
                 <td style="width: 33%;">{{ $penjualan->nomor_faktur }}</td>
                 <td style="width: 15%;"><strong>Konsumen</strong></td>
                 <td style="width: 2%;">:</td>
-                <td style="width: 33%;">{{ $penjualan->konsumen->nama_konsumen }}</td>
+                <td style="width: 33%;">{{ $penjualan->nama_konsumen }}</td>
             </tr>
             <tr>
                 <td><strong>Tanggal</strong></td>

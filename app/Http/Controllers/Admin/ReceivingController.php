@@ -15,21 +15,31 @@ class ReceivingController extends Controller
     {
         $user = Auth::user();
         $query = \App\Models\Receiving::with(['purchaseOrder', 'gudang', 'receivedBy']);
+        
+        // Jika user BUKAN SA atau MA, maka filter berdasarkan gudang user tersebut.
+        // AG (Admin Gudang) akan masuk ke kondisi ini, sehingga hanya melihat data gudangnya sendiri.
         if (!in_array($user->jabatan->singkatan, ['SA', 'MA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
+        
         $receivings = $query->latest()->paginate(15);
         return view('admin.receivings.index', compact('receivings'));
     }
 
     public function create()
     {
+        // Gate 'can-receive' sudah diupdate di AuthServiceProvider untuk mengizinkan 'AG'
         $this->authorize('can-receive');
+        
         $user = Auth::user();
         $query = PurchaseOrder::whereIn('status', ['APPROVED', 'PARTIALLY_RECEIVED']);
+        
+        // Filter PO: Hanya SA yang bisa melihat PO lintas gudang. 
+        // MA, KG, dan AG hanya melihat gudang mereka.
         if (!in_array($user->jabatan->singkatan, ['SA'])) {
             $query->where('gudang_id', $user->gudang_id);
         }
+        
         $purchaseOrders = $query->orderBy('tanggal_po', 'desc')->get();
         return view('admin.receivings.create', compact('purchaseOrders'));
     }
@@ -55,18 +65,16 @@ class ReceivingController extends Controller
         try {
             $po = PurchaseOrder::with('details')->findOrFail($request->purchase_order_id);
 
-            // --- PERBAIKAN UTAMA DI SINI ---
             $receiving = Receiving::create([
                 'purchase_order_id' => $po->id,
                 'gudang_id' => $po->gudang_id,
-                'nomor_penerimaan' => Receiving::generateReceivingNumber(), // Memanggil dari Model
+                'nomor_penerimaan' => Receiving::generateReceivingNumber(),
                 'tanggal_terima' => $request->tanggal_terima,
                 'status' => 'PENDING_QC',
                 'catatan' => $request->catatan,
-                'created_by' => Auth::id(), // <-- INI YANG MEMPERBAIKI DATA NULL
+                'created_by' => Auth::id(),
                 'received_by' => Auth::id(),
             ]);
-            // --- END PERBAIKAN ---
 
             foreach ($request->items as $partId => $itemData) {
                 $poDetail = $po->details->firstWhere('part_id', $partId);
@@ -97,9 +105,7 @@ class ReceivingController extends Controller
 
     public function show(Receiving $receiving)
     {
-        // Memuat semua relasi yang dibutuhkan untuk ditampilkan
         $receiving->load('purchaseOrder.supplier', 'details.part', 'createdBy', 'receivedBy', 'qcBy', 'putawayBy');
-
         $stockMovements = $receiving->stockMovements()->with(['rak', 'user'])->get();
 
         return view('admin.receivings.show', compact('receiving', 'stockMovements'));

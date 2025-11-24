@@ -18,7 +18,6 @@ class DatabaseSeeder extends Seeder
             QcRakSeeder::class,
             // Dependent Data
             SupplierSeeder::class,
-            KonsumenSeeder::class,
             UserSeeder::class,
         ]);
     }

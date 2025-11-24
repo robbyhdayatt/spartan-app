@@ -103,9 +103,7 @@
         Route::get('purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'show'])->name('purchase-returns.show');
 
         // === PENGGUNA, PENJUALAN, & MARKETING ===
-        Route::resource('konsumens', KonsumenController::class);
         Route::resource('users', UserController::class);
-        Route::resource('campaigns', CampaignController::class);
 
         Route::get('penjualans', [PenjualanController::class, 'index'])->name('penjualans.index');
         Route::get('penjualans/create', [PenjualanController::class, 'create'])->name('penjualans.create');
@@ -122,13 +120,6 @@
         Route::post('sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
         Route::get('sales-returns/{salesReturn}', [SalesReturnController::class, 'show'])->name('sales-returns.show');
 
-        Route::get('incentives/targets', [IncentiveController::class, 'targets'])->name('incentives.targets');
-        Route::post('incentives/targets', [IncentiveController::class, 'storeTarget'])->name('incentives.targets.store');
-        Route::get('incentives/report', [IncentiveController::class, 'report'])->name('incentives.report');
-        Route::post('incentives/{incentive}/mark-as-paid', [IncentiveController::class, 'markAsPaid'])->name('incentives.mark-as-paid');
-
-        Route::resource('customer-discount-categories', CustomerDiscountCategoryController::class);
-
         // === LAPORAN ===
         Route::get('reports/stock-card', [ReportController::class, 'stockCard'])->name('reports.stock-card');
         Route::get('reports/stock-by-warehouse', [ReportController::class, 'stockByWarehouse'])->name('reports.stock-by-warehouse');
@@ -142,7 +133,6 @@
         Route::get('reports/inventory-value/export', [ReportController::class, 'exportInventoryValue'])->name('reports.inventory-value.export');
         Route::get('reports/sales-purchase-analysis', [ReportController::class, 'salesPurchaseAnalysis'])->name('reports.sales-purchase-analysis');
         Route::get('reports/stock-card/export', [ReportController::class, 'exportStockCard'])->name('reports.stock-card.export');
-        Route::get('reports/rekomendasi-po', [ReportController::class, 'rekomendasiPo'])->name('reports.rekomendasi-po');
 
 
         // === STOCK QUARANTINE ===

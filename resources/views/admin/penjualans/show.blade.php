@@ -34,7 +34,7 @@
         <div class="row">
             <div class="col-md-4">
                 <strong>Konsumen:</strong><br>
-                {{ $penjualan->konsumen->nama_konsumen }}
+                {{ $penjualan->nama_konsumen }}
             </div>
             <div class="col-md-4">
                 <strong>Gudang:</strong><br>
