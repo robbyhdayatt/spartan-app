@@ -1,117 +1,185 @@
-{{-- resources/views/dashboards/_superadmin.blade.php --}}
+@extends('adminlte::page')
 
-{{-- Baris untuk Info Box --}}
-<div class="row">
-    <div class="col-lg-3 col-6">
-        <div class="small-box bg-info">
-            <div class="inner">
-                <h3>{{ $salesToday }}</h3>
-                <p>Penjualan Hari Ini</p>
-            </div>
-            <div class="icon"><i class="fas fa-cash-register"></i></div>
-            <a href="{{ route('admin.penjualans.index') }}" class="small-box-footer">Info lebih <i class="fas fa-arrow-circle-right"></i></a>
-        </div>
-    </div>
-    <div class="col-lg-3 col-6">
-        <div class="small-box bg-success">
-            <div class="inner">
-                <h3>{{ $poToday }}</h3>
-                <p>Purchase Order Hari Ini</p>
-            </div>
-            <div class="icon"><i class="fas fa-shopping-cart"></i></div>
-            <a href="{{ route('admin.purchase-orders.index') }}" class="small-box-footer">Info lebih <i class="fas fa-arrow-circle-right"></i></a>
-        </div>
-    </div>
-    <div class="col-lg-3 col-6">
-        <div class="small-box bg-warning">
-            <div class="inner">
-                <h3>Rp {{ number_format($stockValue, 0, ',', '.') }}</h3>
-                <p>Total Nilai Stok</p>
-            </div>
-            <div class="icon"><i class="fas fa-boxes"></i></div>
-            <a href="{{ route('admin.reports.inventory-value') }}" class="small-box-footer">Info lebih <i class="fas fa-arrow-circle-right"></i></a>
-        </div>
-    </div>
-     <div class="col-lg-3 col-6">
-        <div class="small-box bg-secondary">
-            <div class="inner">
-                <h3>{{ $receivingToday }}</h3>
-                <p>Penerimaan Hari Ini</p>
-            </div>
-            <div class="icon"><i class="fas fa-box-open"></i></div>
-            <a href="{{ route('admin.receivings.index') }}" class="small-box-footer">Info lebih <i class="fas fa-arrow-circle-right"></i></a>
-        </div>
-    </div>
-</div>
+@section('title', 'Dashboard Super Admin')
 
-{{-- Baris untuk Konten Utama (Grafik dan List) --}}
-<div class="row">
-    {{-- Kolom Kiri - Grafik --}}
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Grafik Penjualan (30 Hari Terakhir)</h3>
+@section('content_header')
+    <h1>Overview Sistem Menyeluruh</h1>
+@stop
+
+@section('content')
+    {{-- Baris 1: Ringkasan Entitas --}}
+    <div class="row">
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-info">
+                <div class="inner">
+                    <h3>{{ \App\Models\Gudang::count() }}</h3>
+                    <p>Total Gudang</p>
+                </div>
+                <div class="icon"><i class="fas fa-warehouse"></i></div>
+                <a href="{{ route('admin.gudangs.index') }}" class="small-box-footer">Info Gudang <i class="fas fa-arrow-circle-right"></i></a>
             </div>
-            <div class="card-body">
-                <canvas id="salesChart"></canvas>
+        </div>
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-success">
+                <div class="inner">
+                    <h3>{{ \App\Models\User::count() }}</h3>
+                    <p>Total Pengguna</p>
+                </div>
+                <div class="icon"><i class="fas fa-users"></i></div>
+                <a href="{{ route('admin.users.index') }}" class="small-box-footer">Kelola User <i class="fas fa-arrow-circle-right"></i></a>
+            </div>
+        </div>
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-warning">
+                <div class="inner">
+                    <h3>{{ \App\Models\Supplier::count() }}</h3>
+                    <p>Total Supplier</p>
+                </div>
+                <div class="icon"><i class="fas fa-truck"></i></div>
+                <a href="{{ route('admin.suppliers.index') }}" class="small-box-footer">Lihat Supplier <i class="fas fa-arrow-circle-right"></i></a>
+            </div>
+        </div>
+        <div class="col-lg-3 col-6">
+            <div class="small-box bg-danger">
+                <div class="inner">
+                    <h3>{{ \App\Models\Part::count() }}</h3>
+                    <p>Master Part</p>
+                </div>
+                <div class="icon"><i class="fas fa-cogs"></i></div>
+                <a href="{{ route('admin.parts.index') }}" class="small-box-footer">Lihat Part <i class="fas fa-arrow-circle-right"></i></a>
             </div>
         </div>
     </div>
 
-    {{-- Kolom Kanan - Stok Kritis --}}
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Stok Kritis (di Bawah Minimum)</h3>
+    {{-- Baris 2: Grafik Keuangan (Copy dari _default blade Manajer) --}}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header border-0">
+                    <div class="d-flex justify-content-between">
+                        <h3 class="card-title">Analisis Keuangan (Global)</h3>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="position-relative mb-4">
+                        <canvas id="financialChart" height="200"></canvas>
+                    </div>
+                </div>
             </div>
-            <div class="card-body p-0">
-                <table class="table table-sm">
-                    <tbody>
-                        @forelse($criticalStockParts as $part)
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Top 5 Produk (Global)</h3>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped table-valign-middle">
+                        <thead>
                         <tr>
-                            <td>{{ $part->nama_part }}</td>
-                            <td><span class="badge badge-danger">{{ $part->total_stock }} / {{ $part->stok_minimum }}</span></td>
+                            <th>Produk</th>
+                            <th>Terjual</th>
                         </tr>
-                        @empty
-                        <tr><td class="text-center p-2">Tidak ada stok kritis.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        @foreach($topProducts as $prod)
+                        <tr>
+                            <td>{{ $prod->nama_part }}</td>
+                            <td>
+                                <span class="text-success mr-1"><i class="fas fa-arrow-up"></i></span>
+                                {{ $prod->total_qty }} Unit
+                            </td>
+                        </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-{{-- ... kode HTML untuk superadmin ... --}}
+    {{-- Baris 3: Transaksi Terbaru --}}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header border-transparent">
+                    <h3 class="card-title">Penjualan Terbaru Hari Ini</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table m-0">
+                            <thead>
+                            <tr>
+                                <th>Faktur</th>
+                                <th>Pelanggan</th>
+                                <th>Gudang</th>
+                                <th>Total</th>
+                                <th>Waktu</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach(\App\Models\Penjualan::with('gudang')->latest()->limit(5)->get() as $p)
+                            <tr>
+                                <td><a href="#">{{ $p->nomor_faktur }}</a></td>
+                                <td>{{ $p->nama_konsumen }}</td>
+                                <td>{{ $p->gudang->nama_gudang }}</td>
+                                <td>Rp {{ number_format($p->total_amount, 0, ',', '.') }}</td>
+                                <td>{{ $p->created_at->format('H:i') }}</td>
+                            </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer clearfix">
+                    <a href="{{ route('admin.penjualans.index') }}" class="btn btn-sm btn-secondary float-right">Lihat Semua Transaksi</a>
+                </div>
+            </div>
+        </div>
+    </div>
+@stop
 
-@push('js')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@section('js')
 <script>
-    var ctx = document.getElementById('salesChart').getContext('2d');
-    var salesChart = new Chart(ctx, {
+    // Menggunakan data yang dikirim dari HomeController
+    var ctx = document.getElementById('financialChart').getContext('2d');
+    var myChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: {!! json_encode($salesChartLabels) !!},
-            datasets: [{
-                label: 'Total Penjualan (Rp)',
-                data: {!! json_encode($salesChartData) !!},
-                backgroundColor: 'rgba(0, 123, 255, 0.5)',
-                borderColor: 'rgba(0, 123, 255, 1)',
-                borderWidth: 1
-            }]
+            labels: {!! json_encode($months) !!},
+            datasets: [
+                {
+                    label: 'Penjualan',
+                    borderColor: '#007bff',
+                    backgroundColor: 'transparent',
+                    data: {!! json_encode($salesData) !!}
+                },
+                {
+                    label: 'Pembelian',
+                    borderColor: '#dc3545',
+                    backgroundColor: 'transparent',
+                    data: {!! json_encode($purchaseData) !!}
+                }
+            ]
         },
         options: {
+            maintainAspectRatio: false,
+            tooltips: {
+                mode: 'index',
+                intersect: true
+            },
+            hover: {
+                mode: 'index',
+                intersect: true
+            },
             scales: {
-                y: {
-                    beginAtZero: true,
+                yAxes: [{
                     ticks: {
-                        callback: function(value, index, values) {
-                            return 'Rp ' + new Intl.NumberFormat('id-ID').format(value);
-                        }
+                        callback: function(value) { return 'Rp ' + value/1000000 + ' Jt'; }
                     }
-                }
+                }]
             }
         }
     });
 </script>
-@endpush
+@stop
