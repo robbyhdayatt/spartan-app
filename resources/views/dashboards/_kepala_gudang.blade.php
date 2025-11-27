@@ -16,8 +16,14 @@
                 <h5><i class="icon fas fa-exclamation-triangle"></i> Perhatian!</h5>
                 Ada transaksi yang membutuhkan persetujuan Anda:
                 <ul>
-                    @if($needApprovalPO > 0) <li>{{ $needApprovalPO }} Purchase Order menunggu approval. <a href="{{ route('admin.purchase-orders.index') }}">Lihat</a></li> @endif
-                    @if($needApprovalAdj > 0) <li>{{ $needApprovalAdj }} Penyesuaian Stok menunggu approval. <a href="{{ route('admin.stock-adjustments.index') }}">Lihat</a></li> @endif
+                    @if($needApprovalPO > 0) 
+                        <li>{{ $needApprovalPO }} Purchase Order menunggu approval. <a href="{{ route('admin.purchase-orders.index') }}" class="text-dark"><b>Lihat PO</b></a></li> 
+                    @endif
+                    
+                    {{-- UPDATE TEKS INI --}}
+                    @if($needApprovalAdj > 0) 
+                        <li>{{ $needApprovalAdj }} Pengajuan Write-Off / Penyesuaian Stok menunggu approval. <a href="{{ route('admin.stock-adjustments.index') }}" class="text-dark"><b>Proses Sekarang</b></a></li> 
+                    @endif
                 </ul>
             </div>
         </div>

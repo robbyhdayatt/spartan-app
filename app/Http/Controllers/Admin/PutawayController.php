@@ -44,10 +44,19 @@ class PutawayController extends Controller
             return redirect()->route('admin.putaway.index')->with('error', 'Status tidak valid.');
         }
 
+        // PERBAIKAN 1: Filter item yang SUDAH disimpan agar tidak muncul lagi
+        // Hanya tampilkan item yang qty_disimpan-nya masih kurang dari qty_lolos_qc
         $itemsToPutaway = $receiving->details()
             ->where('qty_lolos_qc', '>', 0)
+            ->whereColumn('qty_disimpan', '<', 'qty_lolos_qc') // <--- TAMBAHAN PENTING
             ->with('part')
             ->get();
+
+        // Jika semua item sudah disimpan tapi status masih PENDING, redirect info
+        if ($itemsToPutaway->isEmpty()) {
+             // Opsional: Bisa otomatis update status di sini jika mau
+             return redirect()->route('admin.putaway.index')->with('error', 'Semua item dalam dokumen ini sudah disimpan.');
+        }
 
         $raks = Rak::where('gudang_id', $receiving->gudang_id)
                     ->where('is_active', true)
@@ -68,15 +77,18 @@ class PutawayController extends Controller
 
         DB::beginTransaction();
         try {
-            $hasPendingItems = false; 
-
             foreach ($request->items as $detailId => $data) {
                 $detail = ReceivingDetail::with('part')->findOrFail($detailId);
                 $part = $detail->part;
-                $jumlahMasuk = $detail->qty_lolos_qc;
+                $qtyBelumSimpan = $detail->qty_lolos_qc - $detail->qty_disimpan;
+                $jumlahMasuk = $qtyBelumSimpan; 
 
                 if ($jumlahMasuk <= 0) continue;
 
+                $stokExisting = $part->inventoryBatches()->sum('quantity'); 
+                $totalNilaiExisting = $stokExisting * $part->harga_beli_rata_rata;
+
+                // Create Batch Baru
                 InventoryBatch::create([
                     'part_id'             => $detail->part_id,
                     'rak_id'              => $data['rak_id'],
@@ -85,13 +97,11 @@ class PutawayController extends Controller
                     'quantity'            => $jumlahMasuk,
                 ]);
 
+                // Update Harga Rata-rata
                 $poDetail = PurchaseOrderDetail::where('purchase_order_id', $receiving->purchase_order_id)
                                                 ->where('part_id', $part->id)
                                                 ->first();
                 $hargaBeliBaru = $poDetail ? $poDetail->harga_beli : $part->harga_beli_default;
-
-                $stokExisting = $part->inventoryBatches()->sum('quantity');
-                $totalNilaiExisting = $stokExisting * $part->harga_beli_rata_rata;
                 
                 $totalNilaiBaru = $totalNilaiExisting + ($jumlahMasuk * $hargaBeliBaru);
                 $totalStokBaru = $stokExisting + $jumlahMasuk;
@@ -109,36 +119,37 @@ class PutawayController extends Controller
                     'jumlah'        => $jumlahMasuk,
                     'stok_sebelum'  => $stokExisting,
                     'stok_sesudah'  => $totalStokBaru,
-                    'referensi'     => $receiving->nomor_penerimaan, // Referensi ke No Penerimaan
+                    'referensi'     => $receiving->nomor_penerimaan,
                     'user_id'       => Auth::id(),
                     'keterangan'    => 'Putaway dari PO ' . ($receiving->purchaseOrder->nomor_po ?? '-'),
                 ]);
 
-                $detail->update(['qty_disimpan' => $jumlahMasuk]);
+                $detail->increment('qty_disimpan', $jumlahMasuk);
             }
-            $allDetails = $receiving->details()->get();
+            $receiving->load('details');
+            $allDetails = $receiving->details;
             
+            $hasPendingItems = false;
+            $allDetails = $receiving->details()->get();
+
             foreach($allDetails as $d) {
-                if ($d->qty_terima > 0 && is_null($d->qty_lolos_qc)) {
+                if ($d->qty_terima <= 0) continue;
+
+                if ($d->qty_lolos_qc > 0 && $d->qty_disimpan < $d->qty_lolos_qc) {
                     $hasPendingItems = true;
-                    break;
-                }
-                
-                if ($d->qty_terima == 0) {
-                    $hasPendingItems = true; 
                     break;
                 }
             }
 
             if ($hasPendingItems) {
                 $receiving->update(['status' => 'PENDING_PUTAWAY']);
-                $pesan = 'Putaway sebagian berhasil disimpan. Dokumen tetap terbuka karena ada item belum diterima.';
+                $pesan = 'Putaway sebagian berhasil. Masih ada item tersisa.';
             } else {
                 $receiving->status = 'COMPLETED';
                 $receiving->putaway_by = Auth::id();
                 $receiving->putaway_at = now();
                 $receiving->save();
-                $pesan = 'Putaway selesai sepenuhnya. Stok batch telah terbentuk.';
+                $pesan = 'Putaway selesai sepenuhnya.';
             }
 
             DB::commit();

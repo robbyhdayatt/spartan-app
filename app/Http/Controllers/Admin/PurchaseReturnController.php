@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\PurchaseReturn;
 use App\Models\Receiving;
 use App\Models\ReceivingDetail;
+use App\Models\InventoryBatch; // Pastikan Import Ini Ada
+use App\Models\StockMovement; // Pastikan Import Ini Ada
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,10 +24,15 @@ class PurchaseReturnController extends Controller
     public function create()
     {
         $this->authorize('manage-purchase-returns');
-        // Get receiving documents that have failed items which have not been fully returned yet
-        $receivings = Receiving::whereHas('details', function ($query) {
-            $query->where('qty_gagal_qc', '>', DB::raw('qty_diretur'));
-        })->get();
+        
+        // PERBAIKAN 1: Hanya ambil Receiving yang MASIH punya stok fisik di Rak Karantina
+        // Kita cek tabel inventory_batches yang terhubung ke receiving_detail_id
+        $receivings = Receiving::whereHas('details.inventoryBatches', function ($query) {
+            $query->where('quantity', '>', 0)
+                  ->whereHas('rak', function($r) {
+                      $r->where('tipe_rak', 'KARANTINA'); // Asumsi tipe rak karantina
+                  });
+        })->with('supplier')->get();
 
         return view('admin.purchase_returns.create', compact('receivings'));
     }
@@ -33,10 +40,32 @@ class PurchaseReturnController extends Controller
     // API Endpoint
     public function getFailedItems(Receiving $receiving)
     {
+        // PERBAIKAN 2: Hitung Available Qty berdasarkan stok fisik batch
         $items = $receiving->details()
-            ->with('part')
-            ->where('qty_gagal_qc', '>', DB::raw('qty_diretur'))
-            ->get();
+            ->with(['part', 'inventoryBatches' => function($q) {
+                $q->where('quantity', '>', 0)
+                  ->whereHas('rak', function($r) {
+                      $r->where('tipe_rak', 'KARANTINA');
+                  });
+            }])
+            ->get()
+            // Filter di level PHP: Hanya ambil yang stok batch-nya > 0
+            ->filter(function($detail) {
+                return $detail->inventoryBatches->sum('quantity') > 0;
+            })
+            ->map(function($detail) {
+                 // Override qty gagal agar frontend menampilkan sisa stok aktual
+                 $stokAktual = $detail->inventoryBatches->sum('quantity');
+                 
+                 // Kita tambahkan atribut virtual untuk frontend
+                 $detail->qty_available_for_return = $stokAktual;
+                 
+                 // Opsional: Timpa qty_gagal_qc hanya untuk tampilan (hati-hati jika field ini dipakai logic lain)
+                 // $detail->qty_gagal_qc = $stokAktual; 
+                 
+                 return $detail;
+            })
+            ->values(); // Reset array keys agar JSON rapi
 
         return response()->json($items);
     }
@@ -67,26 +96,69 @@ class PurchaseReturnController extends Controller
 
             foreach ($request->items as $detailId => $data) {
                 $detail = ReceivingDetail::findOrFail($detailId);
-                $qtyToReturn = $data['qty_retur'];
-                $availableToReturn = $detail->qty_gagal_qc - $detail->qty_diretur;
+                $qtyToReturn = (int) $data['qty_retur'];
+                
+                // Ambil batch stok yang tersedia untuk detail ini (FIFO)
+                $batches = InventoryBatch::where('receiving_detail_id', $detail->id)
+                            ->where('quantity', '>', 0)
+                            ->whereHas('rak', function($r) {
+                                $r->where('tipe_rak', 'KARANTINA');
+                            })
+                            ->orderBy('created_at', 'asc') // FIFO: Ambil yang paling lama dulu
+                            ->get();
 
-                if ($qtyToReturn > $availableToReturn) {
-                    throw new \Exception("Jumlah retur untuk part {$detail->part->nama_part} melebihi jumlah yang tersedia untuk diretur.");
+                $totalAvailable = $batches->sum('quantity');
+
+                if ($qtyToReturn > $totalAvailable) {
+                    throw new \Exception("Jumlah retur untuk part {$detail->part->nama_part} melebihi stok fisik yang tersedia di karantina ($totalAvailable).");
                 }
 
+                // PERBAIKAN 3: Potong Stok Fisik (Looping Batch)
+                $sisaYangHarusDipotong = $qtyToReturn;
+                
+                foreach ($batches as $batch) {
+                    if ($sisaYangHarusDipotong <= 0) break;
+
+                    $potong = min($batch->quantity, $sisaYangHarusDipotong);
+                    
+                    // Catat Movement (PENTING)
+                    StockMovement::create([
+                        'part_id'       => $detail->part_id,
+                        'gudang_id'     => $batch->gudang_id,
+                        'rak_id'        => $batch->rak_id,
+                        'tipe_gerakan'  => 'OUTBOUND', // Atau RETUR_PEMBELIAN
+                        'jumlah'        => -$potong, // Negatif karena keluar
+                        'stok_sebelum'  => $batch->quantity,
+                        'stok_sesudah'  => $batch->quantity - $potong,
+                        'referensi'     => $return->nomor_retur,
+                        'user_id'       => Auth::id(),
+                        'keterangan'    => 'Retur Pembelian ke Supplier',
+                    ]);
+
+                    $batch->decrement('quantity', $potong);
+                    
+                    // Hapus batch jika habis agar bersih
+                    if ($batch->quantity <= 0) {
+                        $batch->delete();
+                    }
+
+                    $sisaYangHarusDipotong -= $potong;
+                }
+
+                // Simpan detail retur
                 $return->details()->create([
                     'part_id' => $detail->part_id,
                     'qty_retur' => $qtyToReturn,
                     'alasan' => $data['alasan'],
                 ]);
 
-                // Update the returned quantity on the receiving detail
+                // Update counter di receiving detail (untuk history)
                 $detail->qty_diretur += $qtyToReturn;
                 $detail->save();
             }
 
             DB::commit();
-            return redirect()->route('admin.purchase-returns.index')->with('success', 'Dokumen retur pembelian berhasil dibuat.');
+            return redirect()->route('admin.purchase-returns.index')->with('success', 'Dokumen retur pembelian berhasil dibuat dan stok karantina telah dipotong.');
 
         } catch (\Exception $e) {
             DB::rollBack();

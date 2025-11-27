@@ -35,7 +35,6 @@ class QcController extends Controller
     {
         $this->authorize('can-qc');
         
-        // Validasi akses gudang
         $user = Auth::user();
         if (!in_array($user->jabatan->singkatan, ['SA', 'MA']) && $receiving->gudang_id !== $user->gudang_id) {
             abort(403, 'Anda tidak memiliki akses ke data gudang ini.');
@@ -45,21 +44,16 @@ class QcController extends Controller
             return redirect()->route('admin.qc.index')->with('error', 'Penerimaan ini sudah diproses QC.');
         }
         
-        // --- PERBAIKAN DISINI ---
-        // Kita filter relasi 'details'. Hanya ambil item yang qty_terima LEBIH DARI 0.
-        // Item yang qty_terima 0 (tidak dikirim supplier) tidak perlu muncul di form QC.
+        // PERBAIKAN DISINI: 
+        // Filter agar item dengan qty_terima 0 TIDAK DIMUAT ke form
+        // Ini mengatasi data "hantu" yang terlanjur tersimpan
         $receiving->load(['details' => function ($query) {
             $query->where('qty_terima', '>', 0);
         }, 'details.part']);
-        // ------------------------
 
-        // Pengecekan tambahan (Opsional):
-        // Jika setelah difilter ternyata kosong (artinya semua item qty 0), 
-        // kita bisa langsung auto-close atau tampilkan pesan error.
+        // Jika ternyata kosong (artinya isinya qty 0 semua), tolak atau auto-close
         if ($receiving->details->isEmpty()) {
-             // Opsional: Bisa langsung update jadi COMPLETED jika mau
-             // $receiving->update(['status' => 'COMPLETED']);
-             // return redirect()->route('admin.qc.index')->with('info', 'Penerimaan ini tidak memiliki item untuk di-QC (Qty 0).');
+             return redirect()->route('admin.qc.index')->with('error', 'Dokumen ini tidak memiliki item valid untuk di-QC (Qty 0).');
         }
 
         return view('admin.qc.form', compact('receiving'));
@@ -83,17 +77,14 @@ class QcController extends Controller
             foreach ($request->items as $detailId => $data) {
                 $detail = ReceivingDetail::findOrFail($detailId);
 
+                if ($detail->qty_terima <= 0) continue; 
+
                 $qtyLolos = (int) $data['qty_lolos'];
                 $qtyGagal = (int) $data['qty_gagal'];
                 $totalInput = $qtyLolos + $qtyGagal;
 
-                if ($totalInput !== $detail->qty_terima) {
-                    $selisih = $detail->qty_terima - $totalInput;
-                    $pesanError = $selisih > 0 
-                        ? "Masih ada $selisih item yang belum dialokasikan (Lolos/Gagal)." 
-                        : "Jumlah input melebihi stok diterima sebanyak " . abs($selisih) . " item.";
-                        
-                    throw new \Exception("Validasi Gagal pada part {$detail->part->nama_part}: $pesanError");
+                if ($totalInput != $detail->qty_terima) {
+                    throw new \Exception("Validasi Gagal pada part {$detail->part->nama_part}: Jumlah input ($totalInput) tidak sesuai qty diterima ({$detail->qty_terima}).");
                 }
 
                 $detail->update([
@@ -105,63 +96,72 @@ class QcController extends Controller
                 $totalLolos += $qtyLolos;
 
                 if ($qtyGagal > 0) {
-                    $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
-                                        ->where('kode_rak', 'like', '%-KRN-QC')
-                                        ->first();
-                    
-                    if (!$quarantineRak) {
-                        $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
-                                            ->where('tipe_rak', 'QUARANTINE')
-                                            ->first();
-                    }
-
-                    if (!$quarantineRak) {
-                        throw new \Exception('Rak karantina belum disetting di gudang ini.');
-                    }
-
-                    $inventory = \App\Models\InventoryBatch::firstOrCreate(
-                        [
-                            'part_id' => $detail->part_id,
-                            'rak_id' => $quarantineRak->id,
-                            'receiving_detail_id' => $detail->id,
-                        ],
-                        [
-                            'gudang_id' => $receiving->gudang_id,
-                            'quantity' => 0
-                        ]
-                    );
-
-                    // 3. Update Stok
-                    $stokSebelum = $inventory->quantity;
-                    $inventory->increment('quantity', $qtyGagal);
-
-                    // 4. Catat Pergerakan Stok (Mutation History)
-                    \App\Models\StockMovement::create([
-                        'part_id' => $detail->part_id,
-                        'gudang_id' => $receiving->gudang_id,
-                        'rak_id' => $quarantineRak->id,
-                        'tipe_gerakan' => 'KARANTINA_QC',
-                        'jumlah' => $qtyGagal,
-                        'stok_sebelum' => $stokSebelum,
-                        'stok_sesudah' => $inventory->quantity,
-                        'referensi' => 'QC Receiving:' . $receiving->id,
-                        'user_id' => Auth::id(),
-                        'keterangan' => 'Barang gagal QC (Batch ID: ' . $inventory->id . ')',
-                    ]);
+                    $this->processQuarantine($detail, $receiving, $qtyGagal);
                 }
             }
 
-            $receiving->status = ($totalLolos > 0) ? 'PENDING_PUTAWAY' : 'COMPLETED';
-            $receiving->qc_by = Auth::id();
-            $receiving->qc_at = now();
+            $remainingItems = $receiving->details()
+                ->where('qty_terima', '>', 0)
+                ->whereNull('qty_lolos_qc')
+                ->count();
+
+            if ($remainingItems > 0) {
+                $receiving->status = 'PENDING_QC';
+            } else {
+                $hasItemsToPutaway = $receiving->details()
+                    ->where('qty_terima', '>', 0)
+                    ->where('qty_lolos_qc', '>', 0)
+                    ->exists();
+
+                $receiving->status = $hasItemsToPutaway ? 'PENDING_PUTAWAY' : 'COMPLETED';
+                $receiving->qc_by = Auth::id();
+                $receiving->qc_at = now();
+            }
+            
             $receiving->save();
 
             DB::commit();
-            return redirect()->route('admin.qc.index')->with('success', 'Hasil QC berhasil disimpan. Stok ' . $totalLolos . ' item siap untuk Putaway.');
+            return redirect()->route('admin.qc.index')->with('success', 'Hasil QC berhasil disimpan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Gagal menyimpan QC: ' . $e->getMessage())->withInput();
+        }
+    }
+
+    private function processQuarantine($detail, $receiving, $qtyGagal) {
+        $quarantineRak = Rak::where('gudang_id', $receiving->gudang_id)
+                            ->where(function($q) {
+                                $q->where('kode_rak', 'like', '%-KRN-QC')
+                                  ->orWhere('tipe_rak', 'QUARANTINE');
+                            })->first();
+
+        if ($quarantineRak) {
+             $inventory = \App\Models\InventoryBatch::firstOrCreate(
+                [
+                    'part_id' => $detail->part_id,
+                    'rak_id' => $quarantineRak->id,
+                    'receiving_detail_id' => $detail->id,
+                    'gudang_id' => $receiving->gudang_id,
+                ],
+                ['quantity' => 0]
+            );
+            
+            $stokSebelum = $inventory->quantity;
+            $inventory->increment('quantity', $qtyGagal);
+
+            \App\Models\StockMovement::create([
+                'part_id' => $detail->part_id,
+                'gudang_id' => $receiving->gudang_id,
+                'rak_id' => $quarantineRak->id,
+                'tipe_gerakan' => 'KARANTINA_QC',
+                'jumlah' => $qtyGagal,
+                'stok_sebelum' => $stokSebelum,
+                'stok_sesudah' => $inventory->quantity,
+                'referensi' => $receiving->nomor_penerimaan,
+                'user_id' => Auth::id(),
+                'keterangan' => 'Barang gagal QC',
+            ]);
         }
     }
 }

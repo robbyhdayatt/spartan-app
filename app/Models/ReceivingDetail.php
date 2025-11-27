@@ -10,6 +10,14 @@ class ReceivingDetail extends Model
     use HasFactory;
     protected $guarded = ['id'];
 
+    // TAMBAHKAN INI AGAR VALIDASI QC TIDAK ERROR
+    protected $casts = [
+        'qty_terima' => 'integer',
+        'qty_lolos_qc' => 'integer',
+        'qty_gagal_qc' => 'integer',
+        'qty_disimpan' => 'integer',
+    ];
+
     public function receiving()
     {
         return $this->belongsTo(Receiving::class);
@@ -20,7 +28,6 @@ class ReceivingDetail extends Model
         return $this->belongsTo(Part::class);
     }
 
-    // --- TAMBAHKAN FUNGSI INI ---
     public function inventoryBatches()
     {
         return $this->hasMany(InventoryBatch::class);

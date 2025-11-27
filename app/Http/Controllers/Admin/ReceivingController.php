@@ -63,6 +63,15 @@ class ReceivingController extends Controller
 
         DB::beginTransaction();
         try {
+            // 1. Cek apakah ada minimal 1 barang yang qty_terima > 0
+            $hasValidItems = collect($request->items)->contains(function ($item) {
+                return $item['qty_terima'] > 0;
+            });
+
+            if (!$hasValidItems) {
+                throw new \Exception("Minimal harus ada 1 barang yang diterima (Qty > 0).");
+            }
+
             $po = PurchaseOrder::with('details')->findOrFail($request->purchase_order_id);
 
             $receiving = Receiving::create([
@@ -76,15 +85,23 @@ class ReceivingController extends Controller
                 'received_by' => Auth::id(),
             ]);
 
-            foreach ($request->items as $partId => $itemData) {
+            foreach ($request->items as $itemData) {
+                $partId = $itemData['part_id']; 
+                $qtyTerima = $itemData['qty_terima'];
+
+                if ($qtyTerima <= 0) {
+                    continue; 
+                }
+
                 $poDetail = $po->details->firstWhere('part_id', $partId);
                 if ($poDetail) {
-                    $poDetail->qty_diterima += $itemData['qty_terima'];
+                    $poDetail->qty_diterima += $qtyTerima;
                     $poDetail->save();
                 }
+                
                 $receiving->details()->create([
                     'part_id' => $partId,
-                    'qty_terima' => $itemData['qty_terima'],
+                    'qty_terima' => $qtyTerima,
                 ]);
             }
 

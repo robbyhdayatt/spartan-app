@@ -77,7 +77,7 @@ $(document).ready(function() {
                 tableBody.empty();
                 if(data.length > 0) {
                     data.forEach(function(item) {
-                        let availableToReturn = item.qty_gagal_qc - item.qty_diretur;
+                        let availableToReturn = item.qty_available_for_return;
                         let row = `
                             <tr>
                                 <td>${item.part.nama_part}</td>

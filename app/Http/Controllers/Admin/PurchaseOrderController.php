@@ -36,7 +36,7 @@ class PurchaseOrderController extends Controller
         $user = auth()->user();
         $suppliers = Supplier::where('is_active', true)->orderBy('nama_supplier')->get();
 
-        if ($user->jabatan->nama_jabatan === 'PJ Gudang') {
+        if ($user->jabatan->nama_jabatan === 'Admin Gudang') {
             $gudangs = Gudang::where('id', $user->gudang_id)->get();
         } else {
             $gudangs = Gudang::where('is_active', true)->orderBy('nama_gudang')->get();

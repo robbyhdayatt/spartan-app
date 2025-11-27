@@ -73,7 +73,7 @@ class HomeController extends Controller
                                            ->count();
                                            
             $needApprovalAdj = StockAdjustment::where('gudang_id', $gudangId)
-                                              ->where('status', 'PENDING')
+                                              ->whereIn('status', ['PENDING', 'PENDING_APPROVAL'])
                                               ->count();
 
             // 5 Transaksi Terakhir
