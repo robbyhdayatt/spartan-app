@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\DiscountService; // <-- IMPORT SERVICE KITA
+use PDF;
+
 
 class PurchaseOrderController extends Controller
 {
@@ -194,5 +196,29 @@ class PurchaseOrderController extends Controller
             ];
         });
         return response()->json($details);
+    }
+
+    // Tambahkan fungsi ini untuk menangani Print HTML biasa
+    public function exportPdf(PurchaseOrder $purchaseOrder)
+    {
+        // Load data relasi
+        $purchaseOrder->load(['supplier', 'gudang', 'details.part', 'createdBy']);
+
+        // Load view khusus PDF yang baru (kita buat di langkah 3)
+        $pdf = PDF::loadView('admin.purchase_orders.pdf', compact('purchaseOrder'));
+
+        // OPSI 1: Ukuran Kertas Continuous Form (9.5 inch x 11 inch)
+        // Ukuran dalam point (1 inch = 72 point).
+        // 9.5 inch = 684 point, 11 inch = 792 point.
+        // Karena Landscape, maka: width=792, height=684
+        $customPaper = [0, 0, 684, 792]; 
+        $pdf->setPaper($customPaper, 'landscape');
+
+        // OPSI 2: Jika ingin A4 Landscape biasa, gunakan ini (hapus customPaper di atas):
+        // $pdf->setPaper('a4', 'landscape');
+
+        // Download file dengan nama khusus
+        $fileName = 'PO-' . str_replace(['/', '\\'], '-', $purchaseOrder->nomor_po) . '.pdf';
+        return $pdf->download($fileName);
     }
 }

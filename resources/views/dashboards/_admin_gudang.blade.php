@@ -80,7 +80,6 @@
                                     <th>Stok Saat Ini</th>
                                     <th>Minimum Stok</th>
                                     <th>Status</th>
-                                    <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -92,11 +91,6 @@
                                     <td>{{ $part->stok_minimum }}</td>
                                     <td>
                                         <span class="badge badge-danger">CRITICAL</span>
-                                    </td>
-                                    <td>
-                                        <a href="{{ route('admin.reports.rekomendasi-po') }}" class="btn btn-primary btn-sm">
-                                            <i class="fas fa-shopping-cart"></i> Buat PO
-                                        </a>
                                     </td>
                                 </tr>
                                 @endforeach

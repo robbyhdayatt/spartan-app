@@ -44,7 +44,6 @@
         </div>
     </div>
 
-    {{-- Tampilkan Alasan Penolakan JIKA ADA --}}
     @if($purchaseOrder->status === 'REJECTED' && $purchaseOrder->rejection_reason)
     <div class="row mt-3">
         <div class="col-12">
@@ -129,9 +128,7 @@
                 @endcan
             @endif
 
-            {{-- !! TAMBAHKAN TOMBOL INI !! --}}
             <a href="{{ route('admin.purchase-orders.pdf', $purchaseOrder) }}" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Ekspor PDF</a>
-
             <a href="{{ route('admin.purchase-orders.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Kembali</a>
         </div>
     </div>

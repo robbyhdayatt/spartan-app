@@ -65,7 +65,7 @@
                 "responsive": true,
                 "lengthChange": false,
                 "autoWidth": false,
-                "order": [[0, "desc"]], // Urutkan berdasarkan kolom pertama (Nomor PO) secara menurun
+                "order": [[0, "asc"]], // Urutkan berdasarkan kolom pertama (Nomor PO) secara menaik
                 "buttons": ["copy", "csv", "excel", "pdf", "print"]
             }).buttons().container().appendTo('#po-table_wrapper .col-md-6:eq(0)');
         });

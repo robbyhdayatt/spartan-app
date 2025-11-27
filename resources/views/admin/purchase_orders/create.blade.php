@@ -152,7 +152,7 @@
 @section('js')
     <script>
         $(document).ready(function() {
-            // Inisialisasi Select2 untuk header
+            // Inisialisasi Select2 untuk header (Supplier & Gudang)
             $('.select2').select2({ placeholder: "Pilih Opsi" });
 
             let itemIndex = 0;
@@ -162,12 +162,58 @@
 
             const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
 
+            // --- FUNGSI BARU: Mencegah Duplikasi Part ---
+            function updatePartAvailability() {
+                // 1. Ambil semua value part yang sedang dipilih (kecuali yang kosong)
+                let selectedParts = [];
+                $('.item-part').each(function() {
+                    let val = $(this).val();
+                    if (val) {
+                        selectedParts.push(val);
+                    }
+                });
+
+                // 2. Loop semua dropdown part untuk update status disable/enable
+                $('.item-part').each(function() {
+                    let currentSelect = $(this);
+                    let currentVal = currentSelect.val(); // Value yang dipilih dropdown ini sendiri
+
+                    // Loop setiap <option> di dalam <select> ini
+                    currentSelect.find('option').each(function() {
+                        let optionVal = $(this).val();
+
+                        // Jangan proses placeholder
+                        if (!optionVal) return;
+
+                        // Jika option ini ada di daftar 'selectedParts' DAN bukan diri sendiri
+                        // Maka disable. Jika tidak, enable.
+                        if (selectedParts.includes(optionVal) && optionVal != currentVal) {
+                            $(this).prop('disabled', true);
+                        } else {
+                            $(this).prop('disabled', false);
+                        }
+                    });
+                    
+                    // Re-init Select2 agar perubahan 'disabled' di render ulang secara visual
+                    // Kita perlu destroy dulu agar bersih, lalu init ulang
+                    // (Opsional: jika Select2 versi baru, kadang otomatis detect, tapi ini lebih aman)
+                    /* Catatan: Mendestroy dan init ulang select2 setiap saat bisa berat jika item ratusan.
+                       Namun untuk PO yang itemnya puluhan, ini cara paling stabil update visual disabled.
+                    */
+                });
+                
+                // Trigger event agar Select2 me-refresh tampilan opsi yang didisable
+                // Tanpa destroy, biasanya select2 master akan memeriksa properti disabled saat dibuka
+            }
+            // ------------------------------------------------
+
             // Aktifkan tombol "Tambah Item" hanya jika Supplier sudah dipilih
             supplierSelect.on('change', function() {
                 if ($(this).val()) {
                     addItemBtn.prop('disabled', false);
                     itemsTable.empty(); // Reset item jika supplier diganti
                     calculateAll();
+                    updatePartAvailability(); // Reset availability logic
                 } else {
                     addItemBtn.prop('disabled', true);
                 }
@@ -177,18 +223,31 @@
             addItemBtn.on('click', function() {
                 let template = $('#po-item-template').html().replace(/__INDEX__/g, itemIndex);
                 itemsTable.append(template);
-                itemsTable.find('tr').last().find('.item-part').select2({ placeholder: "Pilih Part" });
+                
+                // Init Select2 pada baris baru
+                let newSelect = itemsTable.find('tr').last().find('.item-part');
+                newSelect.select2({ placeholder: "Pilih Part" });
+                
                 itemIndex++;
+                
+                // Update status disable option
+                updatePartAvailability();
             });
 
             // Hapus baris item
             itemsTable.on('click', '.remove-item-btn', function() {
                 $(this).closest('tr').remove();
                 calculateAll();
+                
+                // Update status disable option (part yang dihapus jadi available lagi)
+                updatePartAvailability();
             });
 
-            // Event utama: Saat Part dipilih
+            // Event utama: Saat Part dipilih/diganti
             itemsTable.on('change', '.item-part', function() {
+                // Panggil fungsi pencegah duplikasi
+                updatePartAvailability();
+
                 let row = $(this).closest('tr');
                 let partId = $(this).val();
                 let supplierId = supplierSelect.val();
